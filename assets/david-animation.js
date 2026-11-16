@@ -13,7 +13,12 @@
   const top = 524 - 157;
   const idle = [0, 1, 2, 3, 2, 1, 0];
   const aim = [0, 4, 5, 6, 7];
-  const swing = [7, 9, 10, 11, 12, 13, 10];
+  const windUp = [7, 9, 10];
+  const slingTurnMs = 370;
+  const gripX = left + 32;
+  const gripY = top + 54;
+  const footY = top + 157;
+  const fullTurn = Math.PI * 2;
   const throwAndRecover = [14, 15, 16, 17, 18, 19, 20, 21];
   const throwFrameMs = 44;
   const followThroughMs = (throwAndRecover.length - 1) * throwFrameMs;
@@ -36,7 +41,8 @@
 
   let lastDrawAt;
   let aimProgress;
-  let swingProgress;
+  let windUpProgress;
+  let slingAngle;
   let releasedAt;
   let celebration;
   reset();
@@ -44,7 +50,8 @@
   function reset() {
     lastDrawAt = null;
     aimProgress = 0;
-    swingProgress = 0;
+    windUpProgress = 0;
+    slingAngle = 0;
     releasedAt = null;
     celebration = null;
   }
@@ -72,6 +79,46 @@
     drawCell(context, keyframes, 7, fraction < .5 ? from : to);
   }
 
+  function drawWindUp(context) {
+    const ready = windUp.length - 1;
+    const swingWeight = Math.max(0, windUpProgress - ready);
+    if (swingWeight === 0) {
+      drawPose(context, windUp, windUpProgress);
+      return;
+    }
+
+    const x = gripX + 17 + 42 * Math.cos(slingAngle);
+    const y = gripY - 29 + 10 * Math.sin(slingAngle) + 3 * Math.cos(slingAngle);
+    const depth = .5 + .5 * Math.sin(slingAngle);
+    const lean = .012 * Math.cos(slingAngle) * swingWeight;
+    context.save();
+    // A small shoulder sway shares the same transform as the grip, with the feet anchored.
+    context.transform(1, 0, lean, 1, -footY * lean, 0);
+    context.save();
+    context.globalAlpha *= swingWeight;
+    context.lineCap = 'round';
+    context.beginPath();
+    context.moveTo(gripX, gripY);
+    context.quadraticCurveTo((gripX + x) / 2, (gripY + y) / 2 - 5 * depth, x, y);
+    context.strokeStyle = '#583629';
+    context.lineWidth = 2.3;
+    context.stroke();
+    context.strokeStyle = '#b68453';
+    context.lineWidth = .9;
+    context.stroke();
+    context.beginPath();
+    context.ellipse(x, y, 4 + depth, 2.6 + .6 * depth, Math.atan2(y - gripY, x - gripX), 0, fullTurn);
+    context.fillStyle = `rgb(${116 + 36 * depth} ${80 + 20 * depth} ${58 + 3 * depth})`;
+    context.fill();
+    context.strokeStyle = '#39271e';
+    context.lineWidth = 1.2;
+    context.stroke();
+    context.restore();
+    // The fixed illustrated fist stays in front of the cord attachment.
+    drawPose(context, windUp, ready);
+    context.restore();
+  }
+
   function draw(context, now, drag) {
     const dt = lastDrawAt === null ? 16 : Math.min(45, now - lastDrawAt);
     lastDrawAt = now;
@@ -95,14 +142,17 @@
     }
 
     const pull = drag ? Math.hypot(drag.a.x - drag.b.x, drag.a.y - drag.b.y) : 0;
-    const wantsSwing = !!drag && pull >= (swingProgress > 0 ? 103 : 110);
-    const desiredAim = drag ? .7 + 3.3 * Math.min(pull / 105, 1) : 0;
+    const wantsSwing = !!drag && pull >= (windUpProgress > 0 ? 100 : 110);
+    const desiredAim = windUpProgress > 0 ? aim.length - 1
+      : drag ? .7 + 3.3 * Math.min(pull / 105, 1) : 0;
     aimProgress += (desiredAim - aimProgress) * (1 - Math.exp(-dt / 28));
 
-    if ((wantsSwing && aimProgress >= 3.8) || swingProgress > 0) {
-      swingProgress = Math.max(0, swingProgress + dt / (wantsSwing ? 56 : -33));
-      if (swingProgress >= 6) swingProgress = 2 + (swingProgress - 6) % 4;
-      drawPose(context, swing, swingProgress);
+    if ((wantsSwing && aimProgress >= 3.85) || windUpProgress > 0) {
+      windUpProgress = Math.max(0, Math.min(windUp.length, windUpProgress + dt / (wantsSwing ? 45 : -30)));
+      if (windUpProgress > windUp.length - 1) {
+        slingAngle = (slingAngle + dt * fullTurn / slingTurnMs) % fullTurn;
+      }
+      drawWindUp(context);
     } else if (drag || aimProgress > .12) {
       drawPose(context, aim, aimProgress);
     } else {
@@ -115,7 +165,8 @@
     release(now) {
       releasedAt = now;
       aimProgress = 0;
-      swingProgress = 0;
+      windUpProgress = 0;
+      slingAngle = 0;
     },
     celebrate(now) {
       const fromThrow = releasedAt !== null && now <= releasedAt + followThroughMs + settleMs / 2;
