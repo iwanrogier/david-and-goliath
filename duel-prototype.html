@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#172b2a">
+<title>David & Goliath — The Duel Prototype</title>
+<style>
+:root{color-scheme:dark;--gold:#f2c77f;--ink:#172b2a;--panel:#173b36ed;--cream:#f8edda}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#172b2a;color:var(--cream);font-family:system-ui,-apple-system,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+#game{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none}
+header{position:fixed;z-index:2;top:max(8px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));display:flex;align-items:center;gap:10px;pointer-events:none}
+.brand,.hud{background:#173b36e8;border:1px solid #dfbc7e77;border-radius:11px;padding:7px 11px;box-shadow:0 4px 12px #09171644}
+.brand{font-size:12px;letter-spacing:.12em;font-weight:900}.hud{margin-left:auto;display:flex;align-items:center;gap:13px;font-size:13px;font-weight:750}.hud button{pointer-events:auto}
+button{font:inherit;font-weight:800;color:#392c20;background:var(--gold);border:0;border-radius:11px;padding:8px 12px;min-height:40px;box-shadow:0 3px 0 #9d7040;touch-action:none}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #9d7040}
+#prompt{position:fixed;z-index:2;top:64px;left:50%;transform:translateX(-50%);padding:7px 14px;border-radius:9px;background:#4b3929e8;color:#fff1d7;font-size:clamp(12px,2.1vw,16px);font-weight:900;letter-spacing:.03em;white-space:nowrap;pointer-events:none}
+#prompt.open{background:#f0ce86;color:#38281d}#prompt.evade{background:#a94837;color:#fff}
+#aimMeter{position:fixed;z-index:2;top:64px;left:12px;width:116px;padding:7px 9px;border-radius:9px;background:#173b36e8;font-size:11px;font-weight:900}
+#bar{height:6px;margin-top:5px;background:#ffffff2b;border-radius:9px;overflow:hidden}#fill{height:100%;width:0;background:var(--gold);border-radius:9px}
+#overlay{position:fixed;z-index:5;inset:0;display:grid;place-items:center;padding:18px;background:#0c201eb0}
+.card{width:min(440px,100%);padding:23px 22px 20px;background:#173b36f5;border:2px solid #d2aa6a;border-radius:18px;box-shadow:0 18px 60px #07161588;text-align:center}
+.card h1{margin:0 0 8px;font-size:clamp(24px,5vw,34px);color:#f2ca81}.card p{line-height:1.5;margin:8px auto 15px;max-width:370px}.card .sub{color:#dfd5c1;font-size:14px}.card button{min-width:160px;margin-top:6px}
+#bottom{position:fixed;z-index:3;inset:auto 0 max(10px,env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:end;padding:0 max(14px,env(safe-area-inset-left)) 0 max(14px,env(safe-area-inset-right));pointer-events:none}
+#stick{width:94px;height:94px;border:2px solid #f5ddb477;border-radius:50%;background:#183b35a8;position:relative;pointer-events:auto;touch-action:none;display:none}
+#nub{position:absolute;left:50%;top:50%;width:38px;height:38px;border-radius:50%;background:#f2c77fbb;border:2px solid #fff0d9;transform:translate(-50%,-50%)}
+#actions{display:flex;gap:10px;align-items:end;pointer-events:auto}#dodge{min-width:86px;min-height:58px;background:#c77951;color:#fff4dc;box-shadow:0 3px 0 #7b4033;display:none}#throwHint{padding:8px 11px;border-radius:9px;background:#173b36c9;font-size:12px;font-weight:800;pointer-events:none}
+#note{position:fixed;z-index:2;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:6px 10px;border-radius:8px;background:#173b36c9;font-size:12px;white-space:nowrap;pointer-events:none}
+@media (pointer:coarse){#stick,#dodge{display:block}#note{bottom:118px}}
+@media (orientation:portrait) and (pointer:coarse){#prompt{top:62px}#aimMeter{top:104px}header .brand{display:none}.card{padding:18px}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<canvas id="game" width="960" height="540" aria-label="David faces Goliath in a playable duel"></canvas>
+<header><div class="brand">DAVID &amp; GOLIATH · DUEL TEST</div><div class="hud"><span id="hearts">♥ ♥ ♥</span><span id="stones">● ● ● ● ●</span><button id="restart">Restart</button></div></header>
+<div id="prompt">GOLIATH WATCHES YOUR MOVE</div>
+<div id="aimMeter" hidden>SLING POWER<div id="bar"><div id="fill"></div></div></div>
+<div id="note">WASD / arrows move · Space dodge · Hold to aim, release to throw</div>
+<div id="bottom"><div id="stick"><div id="nub"></div></div><div id="actions"><div id="throwHint">HOLD + DRAG TO AIM<br>RELEASE TO THROW</div><button id="dodge">DODGE</button></div></div>
+<div id="overlay"><div class="card"><h1 id="title">The Valley of Elah</h1><p id="copy">Goliath is advancing. Read his spear wind-up, dodge the thrust, then strike the opening while his shield is down.</p><p class="sub">Move around the field. A well-timed dodge avoids the spear. You have five stones and three chances.</p><button id="start">Enter the duel</button></div></div>
+<script src="assets/david-animation.js?v=4"></script>
+<script src="assets/goliath.js?v=2"></script>
+<script>
+(()=>{
+'use strict';
+const canvas=document.querySelector('#game'),ctx=canvas.getContext('2d');
+const prompt=document.querySelector('#prompt'),overlay=document.querySelector('#overlay'),title=document.querySelector('#title'),copy=document.querySelector('#copy'),startButton=document.querySelector('#start'),restart=document.querySelector('#restart');
+const heartsEl=document.querySelector('#hearts'),stonesEl=document.querySelector('#stones'),meter=document.querySelector('#aimMeter'),fill=document.querySelector('#fill'),stick=document.querySelector('#stick'),nub=document.querySelector('#nub'),dodgeButton=document.querySelector('#dodge');
+const W=960,H=540,baseGround=462,clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),ease=v=>{v=clamp(v,0,1);return v*v*(3-2*v)};
+const bg=new Image();bg.src='assets/valley.svg';
+let scale=1,ox=0,oy=0,last=0,now=0,startedAt=0,player={x:245,y:462,vx:0,vy:0,hearts:3,stones:5,invuln:0,dodge:0,dodgeCd:0,aiming:null,shot:null},enemy=null,blockedAt=-Infinity,mode='intro',events=[],score={dodges:0,blocked:0,throws:0,started:0},keys={},stickVector={x:0,y:0},stickId=null,gameWon=false;
+const coarse=matchMedia('(pointer:coarse)').matches;
+function resize(){const dpr=Math.min(devicePixelRatio||1,2),w=innerWidth*dpr,h=innerHeight*dpr;canvas.width=w;canvas.height=h;scale=Math.max(w/W,h/H);ox=(w-W*scale)/2;oy=(h-H*scale)/2;}
+addEventListener('resize',resize);resize();
+function point(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+function announce(text,kind=''){prompt.textContent=text;prompt.className=kind}
+function newDuel(){mode='play';startedAt=performance.now();last=startedAt;now=startedAt;player={x:245,y:462,vx:0,vy:0,hearts:3,stones:5,invuln:0,dodge:0,dodgeCd:0,aiming:null,shot:null};blockedAt=-Infinity;events=[];score={dodges:0,blocked:0,throws:0,started:startedAt};gameWon=false;overlay.hidden=true;davidAnimation.reset();announce('WATCH HIS SHOULDERS — HE IS PREPARING A THRUST');syncHud()}
+function syncHud(){heartsEl.textContent=Array.from({length:3},(_,i)=>i<player.hearts?'♥':'♡').join(' ');stonesEl.textContent=Array.from({length:5},(_,i)=>i<player.stones?'●':'○').join(' ')}
+function showEnd(won){mode=won?'win':'lose';gameWon=won;overlay.hidden=false;title.textContent=won?'Goliath is defeated':'The duel is over';const seconds=Math.max(1,Math.round((performance.now()-score.started)/1000));copy.textContent=won?`A clean hit. You dodged ${score.dodges} spear ${score.dodges===1?'thrust':'thrusts'} and used ${score.throws} of your five stones in ${seconds} seconds.`:`Goliath overwhelmed you. You dodged ${score.dodges} times and had ${player.stones} ${player.stones===1?'stone':'stones'} left. Try changing your timing or position.`;startButton.textContent=won?'Fight again':'Try again';announce(won?'A CLEAN HIT!':'GOLIATH WINS');}
+startButton.addEventListener('click',newDuel);restart.addEventListener('click',newDuel);
+function moveInput(){let x=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0)+stickVector.x;let y=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0)+stickVector.y;const m=Math.hypot(x,y);if(m>1){x/=m;y/=m}return{x,y}}
+function dodge(){if(mode!=='play'||player.dodgeCd>0)return;const v=moveInput();const dir=v.x===0?-1:Math.sign(v.x);player.dodge=.46;player.dodgeCd=.78;player.invuln=.54;player.vx=dir*520;player.vy=(v.y||0)*270;score.dodges++;announce('DODGE! KEEP MOVING','evade');}
+dodgeButton.addEventListener('pointerdown',e=>{e.preventDefault();dodge();});
+addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','Space'].includes(e.key))e.preventDefault();keys[e.key]=true;if(e.code==='Space'&&!e.repeat)dodge();if(e.key==='r'&&!e.repeat)newDuel();});
+addEventListener('keyup',e=>{keys[e.key]=false});
+stick.addEventListener('pointerdown',e=>{e.preventDefault();stickId=e.pointerId;stick.setPointerCapture(stickId);updateStick(e)});
+stick.addEventListener('pointermove',e=>{if(stickId===e.pointerId)updateStick(e)});
+function updateStick(e){const r=stick.getBoundingClientRect(),dx=(e.clientX-r.left-r.width/2)/(r.width/2),dy=(e.clientY-r.top-r.height/2)/(r.height/2),m=Math.max(1,Math.hypot(dx,dy));stickVector={x:dx/m,y:dy/m};nub.style.left=`${50+stickVector.x*34}%`;nub.style.top=`${50+stickVector.y*34}%`;}
+function releaseStick(e){if(stickId!==e.pointerId)return;stickId=null;stickVector={x:0,y:0};nub.style.left='50%';nub.style.top='50%'}stick.addEventListener('pointerup',releaseStick);stick.addEventListener('pointercancel',releaseStick);
+canvas.addEventListener('pointerdown',e=>{if(mode!=='play'||player.shot||player.aiming||e.button===2)return;const p=point(e);player.aiming={id:e.pointerId,x:p.x,y:p.y,start:performance.now()};canvas.setPointerCapture(e.pointerId);meter.hidden=false;e.preventDefault()});
+canvas.addEventListener('pointermove',e=>{if(player.aiming?.id===e.pointerId){const p=point(e);player.aiming.x=p.x;player.aiming.y=p.y}});
+canvas.addEventListener('pointerup',e=>{if(player.aiming?.id!==e.pointerId)return;const a=player.aiming,p=point(e),charge=clamp((performance.now()-a.start)/1350,0,1);player.aiming=null;meter.hidden=true;throwStone(p,charge)});
+canvas.addEventListener('pointercancel',e=>{if(player.aiming?.id===e.pointerId){player.aiming=null;meter.hidden=true}});
+function slingPoint(){return{x:player.x+30,y:player.y-105}}
+function throwStone(target,charge){if(player.stones<=0||mode!=='play')return;const origin=slingPoint(),speed=650+charge*290,g=570,dx=target.x-origin.x,dy=target.y-origin.y;let angle=Math.atan2(dy,dx),time=Math.max(.18,dx/(speed*Math.max(.22,Math.cos(angle))));for(let i=0;i<4;i++){angle=Math.atan2(dy-.5*g*time*time,dx);time=Math.max(.18,dx/(speed*Math.max(.22,Math.cos(angle))))}player.shot={x:origin.x,y:origin.y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,age:0};player.stones--;score.throws++;syncHud();announce(charge>.72?'FULL-POWER THROW':'STONE AWAY');}
+function shiftEnemy(enemy,dx){enemy.x+=dx;enemy.brow.x+=dx;enemy.shield.x+=dx;return enemy}
+function phase(ms){if(ms<720)return'guard';if(ms<1160)return'tell';if(ms<1610)return'thrust';if(ms<3250)return'open';if(ms<3820)return'recover';return'guard'}
+function makeEnemy(t){const cycle=(t-startedAt)%4700,base=goliathDuel.pose(t,startedAt,blockedAt);let dx=0;if(cycle>=1050&&cycle<1700)dx=-80*ease((cycle-1050)/170);else if(cycle>=1700&&cycle<2150)dx=-80*(1-ease((cycle-1700)/450));const e=shiftEnemy(base,dx);e.attack=phase(cycle);e.cycle=cycle;return e}
+function update(dt){const v=moveInput();if(player.dodge>0){player.dodge=Math.max(0,player.dodge-dt);player.x+=player.vx*dt;player.y+=player.vy*dt;player.vx*=Math.exp(-dt*4);player.vy*=Math.exp(-dt*5)}else{player.x+=v.x*190*dt;player.y+=v.y*130*dt;player.vx=v.x*190;player.vy=v.y*130}player.x=clamp(player.x,130,535);player.y=clamp(player.y,414,478);player.dodgeCd=Math.max(0,player.dodgeCd-dt);player.invuln=Math.max(0,player.invuln-dt);enemy=makeEnemy(now);
+ const attackNow=enemy.attack==='thrust';if(attackNow&&!events.includes(Math.floor((now-startedAt)/4700))){events.push(Math.floor((now-startedAt)/4700));const close=Math.abs(player.x-(enemy.x-160))<122&&Math.abs(player.y-462)<45;if(close){if(player.invuln>0){announce('SPEAR MISSED — GREAT DODGE!','open');player.x=clamp(player.x-70,130,535)}else{player.hearts--;player.invuln=1.05;player.x=clamp(player.x-58,130,535);announce('THE SPEAR CAUGHT YOU','evade');syncHud();if(player.hearts<=0){showEnd(false);return}}}else announce('SPEAR THRUST — DODGE NOW','evade')}
+ if(enemy.attack==='open'&&mode==='play'&&prompt.dataset.state!=='open'){announce('SHIELD DOWN — AIM FOR HIS FOREHEAD','open');prompt.dataset.state='open'}else if(enemy.attack!=='open'&&prompt.dataset.state==='open'){prompt.dataset.state='';if(enemy.attack==='tell')announce('WATCH HIS SHOULDERS — HE IS PREPARING A THRUST')}
+ if(player.aiming){fill.style.width=`${Math.round(clamp((now-player.aiming.start)/1350,0,1)*100)}%`}
+ if(player.shot){const s=player.shot,prev={x:s.x,y:s.y};s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy+=570*dt;s.age+=dt;const hit=goliathDuel.impact(prev,s,enemy);if(hit){player.shot=null;if(hit.kind==='brow'){showEnd(true);davidAnimation.celebrate(now);announce('A CLEAN HIT!','open')}else if(hit.kind==='shield'){blockedAt=now;score.blocked++;announce('BLOCKED BY THE SHIELD — WAIT FOR THE OPENING');}else announce('ARMOUR DEFLECTED IT — TRY THE FOREHEAD');}else if(s.age>2.3||s.x>1000||s.y>560||s.x<0){player.shot=null;announce('MISS — REPOSITION AND TRY AGAIN')}if(!player.shot&&player.stones===0&&mode==='play')showEnd(false)}
+}
+function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill()}
+function drawSpear(){if(!enemy||enemy.attack!=='thrust')return;const p=ease((enemy.cycle-1160)/280);const gx=enemy.x-72,gy=baseGround-130;const tipx=gx-228+70*p,tipy=gy+20;ctx.save();ctx.lineCap='round';ctx.strokeStyle='#493a2a';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(tipx,tipy);ctx.stroke();ctx.strokeStyle='#d7b374';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(gx,gy-2);ctx.lineTo(tipx,tipy-2);ctx.stroke();ctx.fillStyle='#b7a27b';ctx.beginPath();ctx.moveTo(tipx-15,tipy-7);ctx.lineTo(tipx,tipy);ctx.lineTo(tipx-15,tipy+7);ctx.closePath();ctx.fill();ctx.restore()}
+function drawAim(){if(!player.aiming||mode!=='play')return;const o=slingPoint(),a=player.aiming,charge=clamp((now-a.start)/1350,0,1);ctx.save();ctx.strokeStyle='#ffe9bcaa';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(o.x,o.y);ctx.lineTo(a.x,a.y);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#ffd587';ctx.lineWidth=2;ctx.beginPath();ctx.arc(a.x,a.y,10,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff0c8';ctx.beginPath();ctx.arc(a.x,a.y,2.5,0,Math.PI*2);ctx.fill();ctx.restore()}
+function drawShot(){const s=player.shot;if(!s)return;ellipse(s.x,s.y,6,6,'#39352f');ellipse(s.x-2,s.y-2,2,2,'#e4d2ae')}
+function drawDavid(){const offset=player.x-101,vertical=player.y-baseGround;ctx.save();ctx.translate(offset,vertical);if(player.invuln>0&&Math.floor(now/75)%2===0)ctx.globalAlpha=.42;const dragging=player.aiming?{a:slingPoint(),b:{x:player.aiming.x,y:player.aiming.y}}:null;davidAnimation.draw(ctx,now,dragging);ctx.restore();if(player.dodge>0){ctx.save();ctx.globalAlpha=.35;ctx.strokeStyle='#ffe4a8';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(player.x-20,player.y-2,24,8,0,0,Math.PI*2);ctx.stroke();ctx.restore()}}
+function draw(){const dpr=canvas.width/innerWidth;ctx.setTransform(dpr*scale,0,0,dpr*scale,dpr*ox,dpr*oy);ctx.clearRect(-ox/scale,-oy/scale,innerWidth/scale,innerHeight/scale);if(bg.complete&&bg.naturalWidth)ctx.drawImage(bg,0,0,W,H);else{ctx.fillStyle='#8ba8a2';ctx.fillRect(0,0,W,H)}if(enemy){drawSpear();const fall=mode==='win'?1:0;goliathDuel.draw(ctx,enemy,fall,now)}drawDavid();drawAim();drawShot();if(player.invuln>0&&mode==='play'){ctx.save();ctx.globalAlpha=.17;ctx.fillStyle='#fff0c0';ctx.beginPath();ctx.arc(player.x,player.y-75,58,0,Math.PI*2);ctx.fill();ctx.restore()}}
+function frame(t){now=t;if(!last)last=t;const dt=Math.min(.04,(t-last)/1000);last=t;if(mode==='play')update(dt);else if(enemy&&mode!=='intro')enemy=makeEnemy(t);else if(mode==='intro')enemy=goliathDuel.pose(t,t);draw();requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
