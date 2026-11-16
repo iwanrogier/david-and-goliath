@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#73b9ee"/>
+      <stop offset=".72" stop-color="#e7e9c3"/>
+      <stop offset="1" stop-color="#f8d596"/>
+    </linearGradient>
+    <linearGradient id="earth" x2="0" y2="1">
+      <stop stop-color="#e9bd79"/>
+      <stop offset="1" stop-color="#c88b4e"/>
+    </linearGradient>
+    <g id="tree" stroke-linecap="round">
+      <path d="M34 116V48m0 35-22-20m22 7 24-26" fill="none" stroke="#594b36" stroke-width="5"/>
+      <path d="M-6 46q-2-42 42-43 35-9 45 28-5 25-43 27-28 4-44-12z" fill="#50774a" stroke="#385a3b" stroke-width="2"/>
+    </g>
+    <path id="cloud" d="M35 126q12-22 28-7 19-20 38 3 20-3 26 10H24q-3-8 11-6z"/>
+  </defs>
+  <rect width="960" height="540" fill="url(#sky)"/>
+  <circle cx="812" cy="83" r="32" fill="#ffe5a3"/>
+  <g fill="#fff" opacity=".8">
+    <use href="#cloud" transform="translate(105 -32)"/>
+    <use href="#cloud" transform="translate(415 9) scale(1.1 .84)"/>
+    <use href="#cloud" transform="translate(680 -3) scale(.68 .68)"/>
+  </g>
+  <path d="m0 282 65-51 32 19 63-65 71 77 44-39 29 21 67-53 80 69 61-45 80 64 85-81 47 45 65-50 65 47 50-72 56 46v326H0z" fill="#8faed1"/>
+  <path d="M0 298q91-52 192-7t214-2 245 4 309-19v266H0z" fill="#9bc2a3"/>
+  <path d="M0 340q122-54 237-9t234-3 239 14 250-30v228H0z" fill="#6f9c7c"/>
+  <g transform="translate(304 7)">
+    <path d="M0 302h15v-22h25v22h13v-32h26v32h13v-21h26v48H0z" fill="#d6b787" stroke="#9d815f" stroke-width="2"/>
+    <path d="m40 270 13-13 26 13z" fill="#d6b787" stroke="#9d815f" stroke-width="2"/>
+    <path d="M11 329v-21h8v21m45 0v-23h9v23m26 0v-29h9v29" fill="#886f50"/>
+  </g>
+  <path d="M0 407q108-58 247-16t254-8q146-40 265 0 88 32 194-16v173H0z" fill="#8db178"/>
+  <use href="#tree" transform="translate(11 288) scale(1.10)"/>
+  <use href="#tree" transform="translate(258 340) scale(.5)"/>
+  <use href="#tree" transform="translate(873 310) scale(.88)"/>
+  <path d="M0 458q151-23 266-7 94 10 214-1 144-18 277-5 103 10 203-6v101H0z" fill="url(#earth)"/>
+  <path d="M0 479q138-17 251-7 140 12 261-3 135-16 252-5 111 9 196-4" fill="none" stroke="#f5d49b" stroke-width="5"/>
+  <g fill="#a9895a">
+    <ellipse cx="38" cy="489" rx="19" ry="8"/>
+    <ellipse cx="210" cy="498" rx="11" ry="5"/>
+    <ellipse cx="388" cy="482" rx="15" ry="5"/>
+    <ellipse cx="566" cy="502" rx="18" ry="7"/>
+    <ellipse cx="759" cy="480" rx="10" ry="4"/>
+    <ellipse cx="916" cy="486" rx="26" ry="10"/>
+  </g>
+  <path d="m28 507-5-16m5 16 7-13m218 3-5-11m259 13 6-12m146 20-5-14m233 13-5-16m5 16 9-13" fill="none" stroke="#6f874f" stroke-width="3" stroke-linecap="round"/>
+</svg>

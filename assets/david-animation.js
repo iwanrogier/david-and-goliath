@@ -9,8 +9,8 @@
   const width = 144;
   const height = 168;
   // All sprites share a ground anchor so David stays planted between poses.
-  const left = 84 - 64;
-  const top = 524 - 157;
+  const left = 101 - 64;
+  const top = 462 - 157;
   const idle = [0, 1, 2, 3, 2, 1, 0];
   const aim = [0, 4, 5, 6, 7];
   const windUp = [7, 9, 10];
@@ -123,7 +123,7 @@
     const dt = lastDrawAt === null ? 16 : Math.min(45, now - lastDrawAt);
     lastDrawAt = now;
     if (!keyframes.naturalWidth) {
-      if (fallback.naturalWidth) context.drawImage(fallback, 35, 379, 98, 146);
+      if (fallback.naturalWidth) context.drawImage(fallback, left + 15, footY - 146, 98, 146);
       return;
     }
 

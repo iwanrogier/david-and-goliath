@@ -1,43 +1,174 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#193c36"><title>David & Goliath v0.8</title><style>*{box-sizing:border-box}body{margin:0;background:#17382f;color:white;font-family:system-ui;text-align:center}main{max-width:480px;max-width:clamp(280px,calc(65svh - 75px),480px);margin:auto}header{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:10px 8px}header strong{font-size:14px}button{background:#f1c67b;border:0;border-radius:11px;padding:10px 12px;font-weight:700;color:#3d3021}button:disabled{opacity:.35}canvas{width:100%;height:auto;display:block;touch-action:none}#gameArea{position:relative}#panel[hidden]{display:none!important}#hint{font-size:13px;color:#e9e3d0;margin:8px 0;padding:0 12px}#panel{position:absolute;z-index:3;top:42%;left:5%;width:90%;max-height:55%;overflow-y:auto;background:#234c3ff5;margin:0;padding:16px;border:2px solid #c8a36b;border-radius:16px;box-shadow:0 12px 30px #102a28a8}#panel.result{top:24%}#panel h2{margin:4px 0 8px}#panel p{margin:7px 0}#levels{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:12px 0}#levels button{padding:10px 2px;font-size:17px}small{display:block;font-size:10px}#action{margin:8px}#panel p{font-size:14px}</style></head><body><main><header><strong>DAVID & GOLIATH</strong><span id="status"></span><button id="menu">Levels</button><button id="retry">Retry</button></header><div id="gameArea"><canvas id="game" width="390" height="600"></canvas><p id="hint">Drag backward anywhere to aim. Release to throw.</p><section id="panel" hidden><h2 id="heading"></h2><p id="description"></p><div id="levels"></div><button id="action"></button><button id="sound">Sound: On</button></section></div></main><script src="assets/david-animation.js?v=3"></script><script>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#193c36"><title>David & Goliath v0.8</title><style>
+*{box-sizing:border-box}
+body{margin:0;background:#17382f;color:white;font-family:system-ui;text-align:center}
+main{width:min(100%,1120px);width:min(100%,1120px,max(320px,calc((100svh - 84px) * 16 / 9)));margin:auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px}
+header strong{font-size:14px;text-align:left}
+#status{margin-left:auto;font-size:13px;white-space:nowrap}
+button{background:#f1c67b;border:0;border-radius:10px;padding:8px 12px;font-weight:700;color:#3d3021;min-height:36px}
+button:disabled{opacity:.35}
+canvas{display:block;width:100%;height:auto;touch-action:none}
+#gameArea{position:relative}
+#panel[hidden]{display:none}
+#hint{font-size:13px;color:#e9e3d0;margin:6px 0;padding:0 12px}
+#rotateHint{display:none;margin:4px 0;color:#e9e3d0;font-size:12px}
+@media (orientation:portrait) and (pointer:coarse){#rotateHint{display:inline}}
+#panel{position:absolute;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(calc(100% - 16px),390px);max-height:calc(100% - 12px);overflow:auto;background:#234c3ff5;padding:10px 14px;border:2px solid #c8a36b;border-radius:14px;box-shadow:0 12px 30px #102a28a8}
+#panel h2{font-size:20px;margin:0 0 4px}
+#panel p{font-size:13px;margin:4px 0}
+#levels{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+#levels:not(:empty){margin:8px 0}
+#levels button{padding:3px 2px;font-size:16px}
+small{display:block;font-size:10px}
+#action{margin:3px 6px 0 0}
+</style></head><body><main><header><strong>DAVID & GOLIATH</strong><span id="status"></span><button id="menu">Levels</button><button id="retry">Retry</button></header><div id="gameArea"><canvas id="game" width="960" height="540"></canvas><section id="panel" hidden><h2 id="heading"></h2><p id="description"></p><div id="levels"></div><button id="action"></button><button id="sound">Sound: On</button></section></div><p id="hint"></p><p id="rotateHint">Rotate your phone for a bigger playfield.</p></main><script src="assets/david-animation.js?v=4"></script><script>
 const canvas=document.querySelector('#game'),g=canvas.getContext('2d'),status=document.querySelector('#status'),panel=document.querySelector('#panel'),heading=document.querySelector('#heading'),description=document.querySelector('#description'),levelButtons=document.querySelector('#levels'),action=document.querySelector('#action'),soundButton=document.querySelector('#sound'),hint=document.querySelector('#hint');
-const stages=[
-{name:"Shepherd's Training",ammo:5,t:[[278,463,23],[320,367,20],[279,267,19]],blocks:[]},
-{name:"The Hillside",ammo:6,t:[[290,465,22],[330,382,20],[285,295,19],[325,215,18]],blocks:[]},
-{name:"Stone and Timber",ammo:7,t:[[300,460,22],[310,353,20],[320,245,19]],blocks:[[226,498,22,18]]},
-{name:"The Narrow Pass",ammo:7,t:[[282,463,20],[330,360,19],[280,260,18],[328,173,17]],blocks:[[227,495,22,18],[246,404,22,17]]},
-{name:"The Shepherd's Trial",ammo:8,t:[[280,464,20],[330,398,19],[285,327,18],[330,252,18],[280,182,17]],blocks:[[228,499,22,18],[248,385,20,17]]}
-];const origin={x:90,y:465};let unlocked=1,stars=[0,0,0,0,0],muted=false,level=0,targets=[],blocks=[],ammo=0,shot=null,drag=null,mode='menu',particles=[],tick=0,ctx,shake=0,streak=[];
+const width = canvas.width;
+const height = canvas.height;
+const groundY = 462;
+const origin = {x:107, y:403};
+const maxPull = 170;
+const throwSpeed = .145;
+const gravity = .35;
+const flightStepMs = 1000 / 60;
+let nextFlightStep = 0;
+const stages = [
+  {name:"Shepherd's Training", ammo:5, t:[[579,402,24],[662,323,22],[748,229,21]], blocks:[]},
+  {name:"The Hillside", ammo:6, t:[[530,413,23],[616,342,22],[715,268,21],[802,195,19]], blocks:[]},
+  {name:"Stone and Timber", ammo:7, t:[[578,407,23],[684,326,22],[789,226,20]], blocks:[[410,416,40,46]]},
+  {name:"The Narrow Pass", ammo:7, t:[[568,410,22],[665,330,21],[750,252,19],[830,164,18]], blocks:[[430,415,42,47],[535,350,40,28]]},
+  {name:"The Shepherd's Trial", ammo:8, t:[[555,408,22],[636,363,21],[710,299,20],[780,228,19],[848,158,18]], blocks:[[375,419,38,43],[506,352,42,31]]},
+];
+let unlocked=1,stars=[0,0,0,0,0],muted=false,level=0,targets=[],blocks=[],ammo=0,shot=null,drag=null,mode='menu',particles=[],tick=0,ctx,shake=0,streak=[];
 try{const p=JSON.parse(localStorage.getItem('david-goliath-v04')||'{}');unlocked=Math.min(5,Math.max(1,p.unlocked||1));if(Array.isArray(p.stars))stars=p.stars.slice(0,5).map(n=>Math.max(0,Math.min(3,n||0)))}catch(e){}
 function persist(){try{localStorage.setItem('david-goliath-v04',JSON.stringify({unlocked,stars}))}catch(e){}}
 function tone(f,d,type='triangle'){if(muted)return;try{ctx=ctx||new(window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();const o=ctx.createOscillator(),v=ctx.createGain();o.type=type;o.frequency.setValueAtTime(f,ctx.currentTime);o.frequency.exponentialRampToValueAtTime(Math.max(60,f*.55),ctx.currentTime+d);v.gain.setValueAtTime(.1,ctx.currentTime);v.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+d);o.connect(v);v.connect(ctx.destination);o.start();o.stop(ctx.currentTime+d)}catch(e){}}
 function update(){status.textContent=mode==='play'?'● '+ammo+' stones':'Level '+(level+1)}
 function start(n){level=n;const s=stages[n];targets=s.t.map(a=>({x:a[0],y:a[1],r:a[2]}));blocks=s.blocks.map(a=>({x:a[0],y:a[1],w:a[2],h:a[3]}));ammo=s.ammo;shot=null;drag=null;particles=[];streak=[];shake=0;davidAnimation.reset();mode='play';panel.hidden=true;if(hint)hint.textContent='LEVEL '+(n+1)+' · '+s.name.toUpperCase()+' — Drag back to aim, then release.';update()}
-function menu(){mode='menu';shot=null;drag=null;davidAnimation.reset();panel.classList.remove('result');panel.hidden=false;heading.textContent='Choose a Level';description.textContent='Earn stars by using fewer stones. Progress saves on this device.';levelButtons.innerHTML='';stages.forEach((s,i)=>{const b=document.createElement('button');b.disabled=i>=unlocked;b.innerHTML=(i+1)+'<small>'+(stars[i]?'★'.repeat(stars[i]):'☆')+'</small>';b.title=s.name;b.onclick=()=>start(i);levelButtons.appendChild(b)});action.textContent='Play Level '+Math.min(unlocked,5);action.onclick=()=>start(Math.min(unlocked,5)-1);if(hint)hint.textContent='SHEPHERD’S TRAINING · FIVE LEVELS';update()}
-function finish(won){mode=won?'win':'lose';panel.classList.add('result');panel.hidden=false;levelButtons.innerHTML='';if(won){davidAnimation.celebrate(performance.now());const used=stages[level].ammo-ammo,required=stages[level].t.length,earned=used<=required?3:used===required+1?2:1;stars[level]=Math.max(stars[level],earned);unlocked=Math.max(unlocked,Math.min(5,level+2));persist();heading.textContent='Level Complete!';description.textContent='★'.repeat(earned)+'☆'.repeat(3-earned)+' · '+used+' stones used';action.textContent=level<4?'Next Level':'Level Select';action.onclick=()=>level<4?start(level+1):menu();tone(630,.35)}else{heading.textContent='Out of Stones';description.textContent='Try another angle or more power.';action.textContent='Try Again';action.onclick=()=>start(level)}update()}
+function menu(){mode='menu';shot=null;drag=null;davidAnimation.reset();panel.hidden=false;heading.textContent='Choose a Level';description.textContent='Earn stars by using fewer stones. Progress saves on this device.';levelButtons.innerHTML='';stages.forEach((s,i)=>{const b=document.createElement('button');b.disabled=i>=unlocked;b.innerHTML=(i+1)+'<small>'+(stars[i]?'★'.repeat(stars[i]):'☆')+'</small>';b.title=s.name;b.onclick=()=>start(i);levelButtons.appendChild(b)});action.textContent='Play Level '+Math.min(unlocked,5);action.onclick=()=>start(Math.min(unlocked,5)-1);if(hint)hint.textContent='SHEPHERD’S TRAINING · FIVE LEVELS';update()}
+function finish(won){mode=won?'win':'lose';panel.hidden=false;levelButtons.innerHTML='';if(won){davidAnimation.celebrate(performance.now());const used=stages[level].ammo-ammo,required=stages[level].t.length,earned=used<=required?3:used===required+1?2:1;stars[level]=Math.max(stars[level],earned);unlocked=Math.max(unlocked,Math.min(5,level+2));persist();heading.textContent='Level Complete!';description.textContent='★'.repeat(earned)+'☆'.repeat(3-earned)+' · '+used+' stones used';action.textContent=level<4?'Next Level':'Level Select';action.onclick=()=>level<4?start(level+1):menu();tone(630,.35)}else{heading.textContent='Out of Stones';description.textContent='Try another angle or more power.';action.textContent='Try Again';action.onclick=()=>start(level)}update()}
 document.querySelector('#menu').onclick=menu;document.querySelector('#retry').onclick=()=>start(level);soundButton.onclick=()=>{muted=!muted;soundButton.textContent=muted?'Sound: Off':'Sound: On';if(!muted)tone(440,.12)};
-function pointer(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*390/r.width,y:(e.clientY-r.top)*600/r.height}}
+function pointer(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*width/r.width,y:(e.clientY-r.top)*height/r.height}}
 canvas.addEventListener('pointerdown',e=>{if(e.button!==0||mode!=='play'||shot||drag)return;const p=pointer(e);drag={a:p,b:p,id:e.pointerId};canvas.setPointerCapture(e.pointerId)});
 canvas.addEventListener('pointermove',e=>{if(drag&&e.pointerId===drag.id)drag.b=pointer(e)});
 function cancelDrag(e){if(drag?.id===e.pointerId)drag=null}
 canvas.addEventListener('pointercancel',cancelDrag);
 canvas.addEventListener('lostpointercapture',cancelDrag);
-canvas.addEventListener('pointerup',e=>{if(!drag||drag.id!==e.pointerId)return;const p=pointer(e),dx=drag.a.x-p.x,dy=drag.a.y-p.y,d=Math.hypot(dx,dy);drag=null;if(d<14)return;const k=Math.min(170,d)/d;shot={x:origin.x,y:origin.y,vx:dx*k*.115,vy:dy*k*.115,age:0};ammo--;davidAnimation.release(performance.now());streak=[];tone(380,.16);update()});
+function aimFrom(start, end) {
+  const dx = start.x - end.x;
+  const dy = start.y - end.y;
+  const distance = Math.hypot(dx, dy);
+  const power = Math.min(maxPull, distance);
+  const scale = distance > 0 ? power / distance * throwSpeed : 0;
+  return {distance, power, vx:dx * scale, vy:dy * scale};
+}
+
+canvas.addEventListener('pointerup', e => {
+  if (!drag || drag.id !== e.pointerId) return;
+  const aim = aimFrom(drag.a, pointer(e));
+  drag = null;
+  if (aim.distance < 14) return;
+  shot = {...origin, vx:aim.vx, vy:aim.vy, age:0};
+  nextFlightStep = performance.now();
+  ammo--;
+  davidAnimation.release(nextFlightStep);
+  streak = [];
+  tone(380,.16);
+  update();
+});
 function oval(x,y,rx,ry,color){g.fillStyle=color;g.beginPath();g.ellipse(x,y,rx,ry,0,0,Math.PI*2);g.fill()}
 function line(x,y,X,Y,color,w){g.strokeStyle=color;g.lineWidth=w;g.lineCap='round';g.beginPath();g.moveTo(x,y);g.lineTo(X,Y);g.stroke()}
-const backgroundArt=new Image();backgroundArt.src='assets/training-landscape.svg';
-function landscape(){if(backgroundArt.complete&&backgroundArt.naturalWidth){g.drawImage(backgroundArt,0,0,390,600);return}
-const sky=g.createLinearGradient(0,0,0,600);sky.addColorStop(0,'#74b6d2');sky.addColorStop(.55,'#d8d9b0');sky.addColorStop(1,'#e6bc7b');g.fillStyle=sky;g.fillRect(0,0,390,600);
-oval(316,107,48,48,'#ffedb855');oval(316,107,30,30,'#ffe8a1');
-for(let i=0;i<4;i++){const x=((i*123+tick*.07)%530)-65;oval(x,120+i*26,53,11,'#ffffff50');oval(x+23,115+i*26,35,10,'#ffffff40')}
-g.fillStyle='#a9c1a2';g.beginPath();g.moveTo(0,345);g.quadraticCurveTo(80,280,150,335);g.quadraticCurveTo(245,260,390,335);g.lineTo(390,600);g.lineTo(0,600);g.fill();
-g.fillStyle='#7fa68b';g.beginPath();g.moveTo(0,423);g.quadraticCurveTo(120,305,245,416);g.quadraticCurveTo(325,351,390,395);g.lineTo(390,600);g.lineTo(0,600);g.fill();
-for(const [x,y,s] of [[19,382,1],[367,375,.8],[345,430,.7]]){line(x,y,x,y-33*s,'#6b6244',5*s);oval(x-12*s,y-37*s,17*s,20*s,'#507c5d');oval(x+9*s,y-42*s,19*s,22*s,'#5f8962');oval(x,y-53*s,16*s,19*s,'#70956c')}
-g.fillStyle='#d7b77e';g.beginPath();g.moveTo(0,522);g.quadraticCurveTo(175,498,390,520);g.lineTo(390,600);g.lineTo(0,600);g.fill();
-g.fillStyle='#b99b68';for(let i=0;i<24;i++){const x=(i*73+13)%390,y=524+(i*37)%72;line(x,y,x-3,y-6,'#8c995f',1.6);if(i%4===0)oval(x+9,y+5,7,3,'#bfa476')}
+const backgroundArt = new Image();
+backgroundArt.src = 'assets/training-landscape-wide.svg';
+
+function landscape() {
+  g.fillStyle = '#8bb7a2';
+  g.fillRect(0, 0, width, height);
+  if (backgroundArt.naturalWidth) g.drawImage(backgroundArt, 0, 0, width, height);
 }
-function preview(){if(!drag)return;const dx=drag.a.x-drag.b.x,dy=drag.a.y-drag.b.y,d=Math.hypot(dx,dy)||1,k=Math.min(170,d)/d;let vx=dx*k*.115,vy=dy*k*.115,x=origin.x,y=origin.y;line(drag.a.x,drag.a.y,drag.b.x,drag.b.y,'#ffffffaa',2);for(let i=0;i<60;i++){x+=vx;y+=vy;vy+=.35;if(i%2===0)oval(x,y,2,2,'#ffffffc9');if(y>600)break}const power=Math.min(100,Math.round(d/170*100));g.fillStyle='#153d36aa';g.fillRect(16,35,116,26);g.fillStyle='#f3d18d';g.fillRect(22,53,power,5);g.fillStyle='white';g.font='12px system-ui';g.fillText('POWER '+power+'%',22,48)}
-function frame(){g.save();try{tick++;if(shake>0){g.translate(Math.sin(tick*2.6)*shake,Math.cos(tick*2.1)*shake*.55);shake*=.78;if(shake<.3)shake=0}landscape();for(const b of blocks){g.fillStyle='#85694e';g.fillRect(b.x,b.y,b.w,b.h);g.strokeStyle='#5b4533';g.lineWidth=3;g.strokeRect(b.x,b.y,b.w,b.h);line(b.x+4,b.y+5,b.x+b.w-4,b.y+b.h-5,'#b49b79',2)}for(const t of targets){line(t.x,t.y,t.x,520,'#6e5134',7);oval(t.x,t.y,t.r+3,t.r+3,'#755138');oval(t.x,t.y,t.r,t.r,'#eee1bc');oval(t.x,t.y,t.r*.65,t.r*.65,'#bd6e4b');oval(t.x,t.y,t.r*.3,t.r*.3,'#f7e3b1');oval(t.x-t.r*.35,t.y-t.r*.35,3,3,'#ffffff66')}davidAnimation.draw(g,performance.now(),drag);preview();
-if(shot){shot.x+=shot.vx;shot.y+=shot.vy;shot.vy+=.35;shot.age++;streak.push({x:shot.x,y:shot.y});if(streak.length>9)streak.shift();streak.forEach((p,i)=>oval(p.x,p.y,Math.max(1,i*.45),Math.max(1,i*.45),'#e7dcc488'));oval(shot.x,shot.y,7,7,'#514d43');const hit=targets.findIndex(t=>Math.hypot(shot.x-t.x,shot.y-t.y)<t.r+7);if(hit>=0){const t=targets.splice(hit,1)[0];for(let i=0;i<12;i++)particles.push({x:t.x,y:t.y,vx:(Math.random()-.5)*7,vy:(Math.random()-.5)*7,life:22});shot=null;streak=[];shake=5;tone(180,.22,'square');if(!targets.length)finish(true)}else if(blocks.some(b=>shot.x+6>b.x&&shot.x-6<b.x+b.w&&shot.y+6>b.y&&shot.y-6<b.y+b.h)){shot=null;streak=[];shake=3;tone(120,.12,'square')}else if(shot.x>420||shot.x< -30||shot.y>630||shot.age>280){shot=null;streak=[]}}
-for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;oval(p.x,p.y,3,3,'#fff1b0');if(p.life<=0)particles.splice(i,1)}if(mode==='play'&&!shot&&ammo===0)finish(false);if(mode==='menu'){g.fillStyle='#163a3599';g.fillRect(0,0,390,600);g.textAlign='center';g.fillStyle='white';g.font='bold 28px system-ui';g.fillText('DAVID & GOLIATH',195,208);g.font='17px system-ui';g.fillText('A shepherd’s journey begins',195,246);g.textAlign='left'}}catch(e){status.textContent='Game error';console.error(e)}finally{g.restore()}requestAnimationFrame(frame)}
+
+function advanceStone(stone) {
+  stone.x += stone.vx;
+  stone.y += stone.vy;
+  stone.vy += gravity;
+}
+
+function targetAt(stone) {
+  return targets.findIndex(t => Math.hypot(stone.x - t.x, stone.y - t.y) < t.r + 7);
+}
+
+function hitsBlock(stone) {
+  return blocks.some(b => stone.x + 6 > b.x && stone.x - 6 < b.x + b.w &&
+    stone.y + 6 > b.y && stone.y - 6 < b.y + b.h);
+}
+
+function outOfBounds(stone) {
+  return stone.x < -30 || stone.x > width + 30 || stone.y > height + 30;
+}
+
+function preview() {
+  if (!drag) return;
+  const aim = aimFrom(drag.a, drag.b);
+  const point = {...origin, vx:aim.vx, vy:aim.vy};
+  line(drag.a.x, drag.a.y, drag.b.x, drag.b.y, '#ffffffaa', 2);
+  for (let i = 0; aim.distance >= 14 && i < 110; i++) {
+    advanceStone(point);
+    if (outOfBounds(point)) break;
+    const impact = targetAt(point) >= 0 || hitsBlock(point);
+    if (impact || i % 2 === 0) oval(point.x, point.y, 2.8, 2.8, '#ffffffde');
+    if (impact) break;
+  }
+  const power = Math.round(aim.power / maxPull * 100);
+  g.fillStyle = '#153d36cc';
+  g.fillRect(16, 16, 138, 31);
+  g.fillStyle = '#f3d18d';
+  g.fillRect(23, 37, power * 1.24, 5);
+  g.fillStyle = 'white';
+  g.font = 'bold 14px system-ui';
+  g.fillText('POWER ' + power + '%', 23, 32);
+}
+
+function advanceShot() {
+  advanceStone(shot);
+  shot.age++;
+  streak.push({x:shot.x, y:shot.y});
+  if (streak.length > 9) streak.shift();
+
+  const hit = targetAt(shot);
+  if (hit >= 0) {
+    const target = targets.splice(hit, 1)[0];
+    for (let i = 0; i < 12; i++) {
+      particles.push({x:target.x,y:target.y,vx:(Math.random()-.5)*7,vy:(Math.random()-.5)*7,life:22});
+    }
+    shot = null;
+    streak = [];
+    shake = 5;
+    tone(180,.22,'square');
+    if (!targets.length) finish(true);
+  } else if (hitsBlock(shot)) {
+    shot = null;
+    streak = [];
+    shake = 3;
+    tone(120,.12,'square');
+  } else if (outOfBounds(shot) || shot.age > 280) {
+    shot = null;
+    streak = [];
+  }
+}
+
+function drawShot(now) {
+  if (!shot) return;
+  // Keep the flight duration consistent on 60 Hz and 120 Hz displays.
+  nextFlightStep = Math.max(nextFlightStep, now - 100);
+  while (shot && now >= nextFlightStep) {
+    advanceShot();
+    nextFlightStep += flightStepMs;
+  }
+  streak.forEach((p,i) => oval(p.x,p.y,Math.max(1,i*.45),Math.max(1,i*.45),'#e7dcc488'));
+  if (shot) oval(shot.x,shot.y,7,7,'#514d43');
+}
+function frame(now){g.save();try{tick++;if(shake>0){g.translate(Math.sin(tick*2.6)*shake,Math.cos(tick*2.1)*shake*.55);shake*=.78;if(shake<.3)shake=0}landscape();for(const b of blocks){g.fillStyle='#85694e';g.fillRect(b.x,b.y,b.w,b.h);g.strokeStyle='#5b4533';g.lineWidth=3;g.strokeRect(b.x,b.y,b.w,b.h);line(b.x+4,b.y+5,b.x+b.w-4,b.y+b.h-5,'#b49b79',2)}for(const t of targets){line(t.x,t.y,t.x,groundY,'#6e5134',7);oval(t.x,t.y,t.r+3,t.r+3,'#755138');oval(t.x,t.y,t.r,t.r,'#eee1bc');oval(t.x,t.y,t.r*.65,t.r*.65,'#bd6e4b');oval(t.x,t.y,t.r*.3,t.r*.3,'#f7e3b1');oval(t.x-t.r*.35,t.y-t.r*.35,3,3,'#ffffff66')}davidAnimation.draw(g,performance.now(),drag);preview();
+drawShot(now);
+for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;oval(p.x,p.y,3,3,'#fff1b0');if(p.life<=0)particles.splice(i,1)}if(mode==='play'&&!shot&&ammo===0)finish(false);if(mode==='menu'){g.fillStyle='#163a3599';g.fillRect(0,0,width,height)}}catch(e){status.textContent='Game error';console.error(e)}finally{g.restore()}requestAnimationFrame(frame)}
 requestAnimationFrame(frame);menu();
 </script></body></html>
