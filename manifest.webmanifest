@@ -1,0 +1,14 @@
+{
+  "id": "./",
+  "name": "David & Goliath",
+  "short_name": "David & Goliath",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#17382f",
+  "theme_color": "#193c36",
+  "icons": [
+    {"src": "assets/app-icon.png", "sizes": "192x192", "type": "image/png"}
+  ]
+}
