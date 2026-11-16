@@ -3,6 +3,10 @@
   sprite.src = 'assets/goliath.webp';
   const rig = new Image();
   rig.src = 'assets/goliath-rig.webp';
+  const atlas = new Image();
+  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=8';
+  const animationFrames = {idle:4,walk:4,shield:4,thrust:5,defeated:4,victory:3};
+  const animationRows = {idle:0,walk:1,shield:2,thrust:3,defeated:4,victory:5};
   const ground = 462;
   const turn = 4700;
   const lowerAt = 1250;
@@ -63,7 +67,8 @@
       [frontLeg[2][0] + Math.sin(phase) * strideWeight * 34, frontLeg[2][1] - bob * 2 - Math.max(0, Math.cos(phase)) * strideWeight * 23],
       [backLeg[2][0] - Math.sin(phase) * strideWeight * 30, backLeg[2][1] - bob * 2 - Math.max(0, -Math.cos(phase)) * strideWeight * 25]
     ];
-    return {x, bob, brow, open, shield, grip, feet};
+    const animation = beat >= lowerAt && beat < opensAt ? 'shield' : beat >= closesAt && beat < raisedAt ? 'shield' : x > stopX + 1 ? 'walk' : 'idle';
+    return {x, bob, brow, open, shield, grip, feet, animation, beat, cycle};
   }
 
   function inside(x, y, center, rx, ry) {
@@ -183,26 +188,33 @@
   }
 
   function draw(g, enemy, fall, blink) {
-    const {x, bob, brow} = enemy;
-    ellipse(g, x - fall * 61, ground + 3, 43 + fall * 35, 8, '#573d2e55');
+    const {x, animation = 'idle'} = enemy;
+    const state = fall ? 'defeated' : animation;
+    const count = animationFrames[state] || 4;
+    let frame;
+    if (state === 'defeated') frame = Math.min(count - 1, Math.floor(fall * count));
+    else if (state === 'shield' && enemy.open) frame = 0;
+    else frame = Math.floor(blink / (state === 'idle' ? 180 : state === 'walk' ? 125 : 95)) % count;
+    const row = animationRows[state] ?? 0;
+    const cellW = 256, cellH = 256;
+    ellipse(g, x, ground + 3, 43 + (fall ? 24 : 0), 8, '#573d2e55');
     g.save();
-    if (fall) {
-      g.translate(x, ground - ease(fall) * 55);
-      g.rotate(-ease(fall) * 1.47);
-      g.translate(-x, -ground);
-    }
-    if (rig.naturalWidth) {
-      drawRig(g, enemy);
-    } else {
-      if (sprite.naturalWidth) g.drawImage(sprite, x - spriteWidth / 2, ground - spriteHeight + bob, spriteWidth, spriteHeight);
+    if (atlas.complete && atlas.naturalWidth) {
+      // Fixed cell size and ground anchor prevent frame-to-frame jitter and foot clipping.
+      g.drawImage(atlas, frame * cellW, row * cellH, cellW, cellH,
+        x - 128, ground - 256, cellW, cellH);
+    } else if (sprite.naturalWidth) {
+      g.drawImage(sprite, x - spriteWidth / 2, ground - spriteHeight, spriteWidth, spriteHeight);
       drawShield(g, enemy.shield);
+    } else if (rig.naturalWidth) {
+      drawRig(g, enemy);
     }
     if (enemy.open && !fall) {
       g.strokeStyle = '#ffdb8a';
       g.globalAlpha = .72 + .22 * Math.sin(blink / 125);
       g.lineWidth = 2;
       g.beginPath();
-      g.ellipse(brow.x, brow.y, 21, 16, 0, 0, Math.PI * 2);
+      g.ellipse(enemy.brow.x, enemy.brow.y, 21, 16, 0, 0, Math.PI * 2);
       g.stroke();
     }
     g.restore();

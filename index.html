@@ -36,7 +36,7 @@ main.immersive{position:fixed;inset:0;width:100%;height:100%;height:100dvh;overf
 #levels button{padding:3px 2px;font-size:16px}
 small{display:block;font-size:10px}
 #action{margin:3px 6px 0 0}
-</style></head><body><main><header><strong>DAVID & GOLIATH</strong><span id="status"></span><button id="menu">Levels</button><button id="retry">Retry</button><button id="fullscreen" type="button" hidden>Full screen</button></header><div id="gameArea"><canvas id="game" width="960" height="540"></canvas><p id="duelCue" hidden aria-live="polite"></p><div id="powerMeter" hidden><span id="powerText"></span><progress id="powerBar" max="100" value="0" aria-label="Throw power"></progress></div><section id="panel" hidden><h2 id="heading"></h2><p id="description"></p><div id="levels"></div><button id="action"></button><button id="sound">Sound: On</button></section></div><p id="hint"></p><p id="rotateHint">Rotate your phone for a bigger playfield.</p><dialog id="screenHelp"><p>On iPhone, tap Share in your browser, then Add to Home Screen. Turn on Open as Web App if shown, tap Add, and launch the game from its icon.</p><form method="dialog"><button>Close</button></form></dialog></main><script src="assets/david-animation.js?v=4"></script><script src="assets/goliath.js?v=2"></script><script>
+</style></head><body><main><header><strong>DAVID & GOLIATH</strong><span id="status"></span><button id="menu">Levels</button><button id="retry">Retry</button><button id="fullscreen" type="button" hidden>Full screen</button></header><div id="gameArea"><canvas id="game" width="960" height="540"></canvas><p id="duelCue" hidden aria-live="polite"></p><div id="powerMeter" hidden><span id="powerText"></span><progress id="powerBar" max="100" value="0" aria-label="Throw power"></progress></div><section id="panel" hidden><h2 id="heading"></h2><p id="description"></p><div id="levels"></div><button id="action"></button><button id="sound">Sound: On</button></section></div><p id="hint"></p><p id="rotateHint">Rotate your phone for a bigger playfield.</p><dialog id="screenHelp"><p>On iPhone, tap Share in your browser, then Add to Home Screen. Turn on Open as Web App if shown, tap Add, and launch the game from its icon.</p><form method="dialog"><button>Close</button></form></dialog></main><script src="assets/david-animation.js?v=4"></script><script src="assets/goliath.js?v=8"></script><script>
 const canvas=document.querySelector('#game'),g=canvas.getContext('2d'),status=document.querySelector('#status'),panel=document.querySelector('#panel'),heading=document.querySelector('#heading'),description=document.querySelector('#description'),levelButtons=document.querySelector('#levels'),action=document.querySelector('#action'),soundButton=document.querySelector('#sound'),hint=document.querySelector('#hint');
 const width = canvas.width;
 const height = canvas.height;
@@ -452,6 +452,7 @@ function drawDuel(now) {
     }
   }
   const fall = duel.wonAt === null ? 0 : Math.min(1, Math.max(0, (now - duel.wonAt) / 660));
+  if (mode === 'lose') duel.enemy.animation = 'victory';
   goliathDuel.draw(g, duel.enemy, fall, now);
   if (mode === 'duel-fall' && now >= duel.wonAt + 970) finish(true);
 }
