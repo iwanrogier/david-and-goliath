@@ -54,7 +54,7 @@ const W=960,H=540,baseGround=462,clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),ease=v
 const bg=new Image();bg.src='assets/valley.svg';
 let scale=1,ox=0,oy=0,last=0,now=0,startedAt=0,player={x:355,y:462,vx:0,vy:0,hearts:3,stones:5,invuln:0,dodge:0,dodgeCd:0,aiming:null,shot:null,phase:'guard'},enemy=null,blockedAt=-Infinity,mode='intro',events=[],score={dodges:0,blocked:0,throws:0,started:0},keys={},stickVector={x:0,y:0},stickId=null,gameWon=false;
 const coarse=matchMedia('(pointer:coarse)').matches;
-function resize(){const dpr=Math.min(devicePixelRatio||1,2),w=innerWidth*dpr,h=innerHeight*dpr;canvas.width=w;canvas.height=h;scale=Math.min(w/W,h/H);ox=(w-W*scale)/2;oy=(h-H*scale)/2;}
+function resize(){const dpr=Math.min(devicePixelRatio||1,2),w=innerWidth,h=innerHeight;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);scale=Math.min(w/W,h/H);ox=(w-W*scale)/2;oy=(h-H*scale)/2;}
 addEventListener('resize',resize);resize();
 function point(e){const r=canvas.getBoundingClientRect(),s=Math.min(r.width/W,r.height/H),left=(r.width-W*s)/2,top=(r.height-H*s)/2;return{x:(e.clientX-r.left-left)/s,y:(e.clientY-r.top-top)/s}}
 function announce(text,kind=''){prompt.textContent=text;prompt.className=kind}
