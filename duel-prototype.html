@@ -26,8 +26,10 @@ button:active{transform:translateY(2px);box-shadow:0 1px 0 #9d7040}
 #nub{position:absolute;left:50%;top:50%;width:38px;height:38px;border-radius:50%;background:#f2c77fbb;border:2px solid #fff0d9;transform:translate(-50%,-50%)}
 #actions{display:flex;gap:10px;align-items:end;pointer-events:auto}#dodge{min-width:86px;min-height:58px;background:#c77951;color:#fff4dc;box-shadow:0 3px 0 #7b4033;display:none}#throwHint{padding:8px 11px;border-radius:9px;background:#173b36c9;font-size:12px;font-weight:800;pointer-events:none}
 #note{position:fixed;z-index:2;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:6px 10px;border-radius:8px;background:#173b36c9;font-size:12px;white-space:nowrap;pointer-events:none}
+#rotate{display:none;position:fixed;z-index:8;inset:0;place-items:center;padding:24px;background:#102320f5;text-align:center;font-size:clamp(22px,7vw,32px);font-weight:900;color:#f2ca81}
+#rotate span{display:block;margin-top:12px;color:#f8edda;font-size:15px;font-weight:600}
 @media (pointer:coarse){#stick,#dodge{display:block}#note{bottom:118px}}
-@media (orientation:portrait) and (pointer:coarse){#prompt{top:62px}#aimMeter{top:104px}header .brand{display:none}.card{padding:18px}}
+@media (orientation:portrait) and (pointer:coarse){#rotate{display:grid}#prompt{top:62px}#aimMeter{top:104px}header .brand{display:none}.card{padding:18px}}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -38,6 +40,7 @@ button:active{transform:translateY(2px);box-shadow:0 1px 0 #9d7040}
 <div id="aimMeter" hidden>SLING POWER<div id="bar"><div id="fill"></div></div></div>
 <div id="note">WASD / arrows move · Space dodge · Hold to aim, release to throw</div>
 <div id="bottom"><div id="stick"><div id="nub"></div></div><div id="actions"><div id="throwHint">HOLD + DRAG TO AIM<br>RELEASE TO THROW</div><button id="dodge">DODGE</button></div></div>
+<div id="rotate">Turn your phone sideways<span>This duel is designed for a wide screen.</span></div>
 <div id="overlay"><div class="card"><h1 id="title">The Valley of Elah</h1><p id="copy">Goliath is advancing. Read his spear wind-up, dodge the thrust, then strike the opening while his shield is down.</p><p class="sub">Move around the field. A well-timed dodge avoids the spear. You have five stones and three chances.</p><button id="start">Enter the duel</button></div></div>
 <script src="assets/david-animation.js?v=4"></script>
 <script src="assets/goliath.js?v=2"></script>
