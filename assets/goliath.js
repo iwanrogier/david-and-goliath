@@ -4,23 +4,26 @@
   const rig = new Image();
   rig.src = 'assets/goliath-rig.webp';
   const atlas = new Image();
-  atlas.src = 'assets/goliath-v08/goliath-v08-transparent.png?v=1';
+  atlas.src = 'assets/goliath-v08/goliath-v08-transparent.png?v=2';
   const animationFrames = {idle:4,walk:4,shield:4,thrust:5,defeated:4,victory:3};
   const animationRows = {idle:0,walk:1,shield:2,thrust:3,defeated:4,victory:5};
   const ground = 462;
   const turn = 5200;
+  const stepDuration = 400;
+  const approachSteps = 4;
+  const approachDuration = stepDuration * approachSteps;
   const lowerAt = 1250;
   const opensAt = 1690;
   const closesAt = 3290;
   const raisedAt = 3710;
-  const walkDuration = 800;
   const startX = 828;
-  const stride = 30;
-  const stopX = 582;
+  const stride = 37.5;
+  const stopX = startX - stride * approachSteps;
   const spriteWidth = 176;
   const spriteHeight = 246;
-  const browOffsetX = 6;
-  const browOffsetY = -216;
+  // The target is positioned on the exposed forehead in the 256px atlas cell.
+  const browOffsetX = -12;
+  const browOffsetY = -176;
   const cellWidth = 352;
   const cellHeight = 492;
   const shieldShoulder = [265, 178];
@@ -39,15 +42,20 @@
 
   function pose(at, startedAt, blockedAt = -Infinity) {
     const elapsed = Math.max(0, at - startedAt);
-    const cycle = Math.floor(elapsed / turn);
-    const beat = elapsed % turn;
-    const stepProgress = ease(beat / walkDuration);
-    const step = stepProgress;
-    const x = Math.max(stopX, startX - stride * (cycle + step));
-    const gait = startX - stride * cycle > stopX ? (beat < walkDuration ? stepProgress : 1) : 1;
-    const phase = gait * Math.PI * 2;
-    const strideWeight = Math.sin(Math.PI * gait);
-    const walkBob = beat < walkDuration ? -Math.sin(Math.PI * stepProgress) * 2.5 : 0;
+    // Four planted steps bring Goliath forward in 1.6 seconds, then the attack
+    // cycle begins from a stable position. No slow per-cycle sliding.
+    const approachStep = Math.min(approachSteps, Math.floor(elapsed / stepDuration));
+    const stepPhase = elapsed < approachDuration ? (elapsed % stepDuration) / stepDuration : 1;
+    const moving = elapsed < approachDuration;
+    const x = moving
+      ? startX - stride * (approachStep + ease(stepPhase))
+      : stopX;
+    const combatElapsed = Math.max(0, elapsed - approachDuration);
+    const cycle = Math.floor(combatElapsed / turn);
+    const beat = combatElapsed % turn;
+    const phase = moving ? stepPhase * Math.PI * 2 : 0;
+    const strideWeight = moving ? Math.sin(Math.PI * stepPhase) : 0;
+    const walkBob = moving ? -Math.sin(Math.PI * stepPhase) * 2.5 : 0;
     const open = beat >= opensAt && beat < closesAt;
     const drop = beat < opensAt ? ease((beat - lowerAt) / (opensAt - lowerAt))
       : 1 - ease((beat - closesAt) / (raisedAt - closesAt));
@@ -77,9 +85,9 @@
     } else if (beat >= closesAt && beat < raisedAt) {
       animation = 'shield';
       animationProgress = ease((beat - closesAt) / (raisedAt - closesAt));
-    } else if (beat < walkDuration && x > stopX + 1) {
+    } else if (moving) {
       animation = 'walk';
-      animationProgress = beat / walkDuration;
+      animationProgress = stepPhase;
     }
     return {x, bob, brow, open, shield, grip, feet, animation, animationProgress, beat, cycle};
   }
@@ -208,7 +216,7 @@
     if (state === 'defeated') {
       frame = Math.min(count - 1, Math.floor(clamp(fall) * count));
     } else if (state === 'walk') {
-      // One full 4-frame gait plays during the same 800 ms as Goliath's deliberate step.
+      // Each planted 400 ms step advances through all four walk poses in sync.
       frame = Math.min(count - 1, Math.floor(clamp(enemy.animationProgress ?? 0) * count));
     } else if (state === 'thrust') {
       // The playable duel's 450 ms spear lunge drives all five attack poses in sequence.
@@ -233,23 +241,27 @@
       // Atlas frames face right; mirror them so Goliath faces David. The cleaned PNG preserves true transparency.
       g.translate(2*x,0);
       g.scale(-1,1);
+      // Draw the complete source cell at native size; scaling the cell height had
+      // shaved the lowest antialiased foot pixels in the extended walking poses.
       g.drawImage(atlas, frame * cellW, row * cellH, cellW, cellH,
-        x - 128, ground - 248, cellW, 248);
+        x - 128, ground - 256, cellW, cellH);
     } else if (sprite.naturalWidth) {
       g.drawImage(sprite, x - spriteWidth / 2, ground - spriteHeight, spriteWidth, spriteHeight);
       drawShield(g, enemy.shield);
     } else if (rig.naturalWidth) {
       drawRig(g, enemy);
     }
+    g.restore();
     if (enemy.open && !fall) {
+      g.save();
       g.strokeStyle = '#ffdb8a';
       g.globalAlpha = .72 + .22 * Math.sin(blink / 125);
       g.lineWidth = 2;
       g.beginPath();
       g.ellipse(enemy.brow.x, enemy.brow.y, 21, 16, 0, 0, Math.PI * 2);
       g.stroke();
+      g.restore();
     }
-    g.restore();
   }
 
   window.goliathDuel = {pose, impact, draw};
