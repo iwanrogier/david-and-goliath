@@ -4,17 +4,17 @@
   const rig = new Image();
   rig.src = 'assets/goliath-rig.webp';
   const atlas = new Image();
-  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=9';
+  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=10';
   const animationFrames = {idle:4,walk:4,shield:4,thrust:5,defeated:4,victory:3};
   const animationRows = {idle:0,walk:1,shield:2,thrust:3,defeated:4,victory:5};
   const ground = 462;
-  const turn = 4700;
+  const turn = 5200;
   const lowerAt = 1250;
   const opensAt = 1690;
   const closesAt = 3290;
   const raisedAt = 3710;
   const startX = 828;
-  const stride = 31;
+  const stride = 30;
   const stopX = 582;
   const spriteWidth = 176;
   const spriteHeight = 246;
@@ -40,12 +40,13 @@
     const elapsed = Math.max(0, at - startedAt);
     const cycle = Math.floor(elapsed / turn);
     const beat = elapsed % turn;
-    const step = ease(beat / 1000);
+    const stepProgress = ease(beat / 720);
+    const step = stepProgress;
     const x = Math.max(stopX, startX - stride * (cycle + step));
-    const gait = startX - stride * cycle > stopX ? Math.min(1, beat / 1000) : 1;
+    const gait = startX - stride * cycle > stopX ? (beat < 720 ? stepProgress : 1) : 1;
     const phase = gait * Math.PI * 2;
     const strideWeight = Math.sin(Math.PI * gait);
-    const walkBob = -Math.abs(Math.sin(phase)) * strideWeight * 3;
+    const walkBob = beat < 720 ? -Math.sin(Math.PI * stepProgress) * 2.5 : 0;
     const open = beat >= opensAt && beat < closesAt;
     const drop = beat < opensAt ? ease((beat - lowerAt) / (opensAt - lowerAt))
       : 1 - ease((beat - closesAt) / (raisedAt - closesAt));
@@ -67,7 +68,7 @@
       [frontLeg[2][0] + Math.sin(phase) * strideWeight * 34, frontLeg[2][1] - bob * 2 - Math.max(0, Math.cos(phase)) * strideWeight * 23],
       [backLeg[2][0] - Math.sin(phase) * strideWeight * 30, backLeg[2][1] - bob * 2 - Math.max(0, -Math.cos(phase)) * strideWeight * 25]
     ];
-    const animation = beat >= lowerAt && beat < opensAt ? 'shield' : beat >= closesAt && beat < raisedAt ? 'shield' : x > stopX + 1 ? 'walk' : 'idle';
+    const animation = beat >= lowerAt && beat < opensAt ? 'shield' : beat >= closesAt && beat < raisedAt ? 'shield' : beat < 720 && x > stopX + 1 ? 'walk' : 'idle';
     return {x, bob, brow, open, shield, grip, feet, animation, beat, cycle};
   }
 
@@ -194,7 +195,7 @@
     let frame;
     if (state === 'defeated') frame = Math.min(count - 1, Math.floor(fall * count));
     else if (state === 'shield' && enemy.open) frame = 0;
-    else frame = Math.floor(blink / (state === 'idle' ? 180 : state === 'walk' ? 125 : 95)) % count;
+    else frame = Math.floor(blink / (state === 'idle' ? 320 : state === 'walk' ? 190 : 240)) % count;
     const row = animationRows[state] ?? 0;
     const cellW = 256, cellH = 256;
     ellipse(g, x, ground + 3, 43 + (fall ? 24 : 0), 8, '#573d2e55');
@@ -202,7 +203,7 @@
     if (atlas.complete && atlas.naturalWidth) {
       // Atlas frames face left toward David and have clean transparent edges.
       g.drawImage(atlas, frame * cellW, row * cellH, cellW, cellH,
-        x - 128, ground - 256, cellW, cellH);
+        x - 128, ground - 248, cellW, 248);
     } else if (sprite.naturalWidth) {
       g.drawImage(sprite, x - spriteWidth / 2, ground - spriteHeight, spriteWidth, spriteHeight);
       drawShield(g, enemy.shield);
