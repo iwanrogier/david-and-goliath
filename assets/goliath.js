@@ -4,7 +4,7 @@
   const rig = new Image();
   rig.src = 'assets/goliath-rig.webp';
   const atlas = new Image();
-  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=10';
+  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=11';
   const animationFrames = {idle:4,walk:4,shield:4,thrust:5,defeated:4,victory:3};
   const animationRows = {idle:0,walk:1,shield:2,thrust:3,defeated:4,victory:5};
   const ground = 462;
@@ -202,6 +202,8 @@
     g.save();
     if (atlas.complete && atlas.naturalWidth) {
       // Atlas frames face left toward David and have clean transparent edges.
+      g.translate(2*x,0);
+      g.scale(-1,1);
       g.drawImage(atlas, frame * cellW, row * cellH, cellW, cellH,
         x - 128, ground - 248, cellW, 248);
     } else if (sprite.naturalWidth) {
