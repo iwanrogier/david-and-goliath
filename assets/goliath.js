@@ -212,7 +212,7 @@
         const i=queue[head++], xx=i%w, yy=(i/w)|0;
         if(xx)add(i-1); if(xx<w-1)add(i+1); if(yy)add(i-w); if(yy<h-1)add(i+w);
       }
-      for(let i=0;i<seen.length;i++)if(seen[i])d[i*4+3]=0;
+      for(let i=0;i<seen.length;i++){const base=i*4, neutral=Math.max(d[base],d[base+1],d[base+2])-Math.min(d[base],d[base+1],d[base+2]);if(seen[i]||(((i/w)|0)>h-34&&Math.min(d[base],d[base+1],d[base+2])>100&&neutral<60))d[base+3]=0;}
       p.putImageData(image,x0,y0);
     }
     cleanedAtlas=work;
