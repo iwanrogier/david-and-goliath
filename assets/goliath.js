@@ -203,7 +203,7 @@
       let head = 0, tail = 0;
       const pale = i => {
         const a=d[i*4+3], r=d[i*4], gg=d[i*4+1], b=d[i*4+2];
-        return a > 0 && Math.min(r,gg,b) > 218 && Math.max(r,gg,b)-Math.min(r,gg,b) < 28;
+        return a > 0 && Math.min(r,gg,b) > 172 && Math.max(r,gg,b)-Math.min(r,gg,b) < 24;
       };
       const add = i => { if (!seen[i] && pale(i)) { seen[i]=1; queue[tail++]=i; } };
       for(let xx=0;xx<w;xx++){add(xx);add((h-1)*w+xx)}
