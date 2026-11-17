@@ -4,7 +4,7 @@
   const rig = new Image();
   rig.src = 'assets/goliath-rig.webp';
   const atlas = new Image();
-  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=8';
+  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=9';
   const animationFrames = {idle:4,walk:4,shield:4,thrust:5,defeated:4,victory:3};
   const animationRows = {idle:0,walk:1,shield:2,thrust:3,defeated:4,victory:5};
   const ground = 462;
@@ -187,37 +187,6 @@
     g.restore();
   }
 
-  let cleanedAtlas = null;
-  atlas.addEventListener('load', () => {
-    const cell = 256, cols = 5, rows = 6;
-    const work = document.createElement('canvas');
-    work.width = atlas.naturalWidth; work.height = atlas.naturalHeight;
-    const p = work.getContext('2d', {willReadFrequently:true});
-    p.drawImage(atlas, 0, 0);
-    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
-      const x0 = col * cell, y0 = row * cell;
-      if (x0 >= work.width || y0 >= work.height) continue;
-      const w = Math.min(cell, work.width - x0), h = Math.min(cell, work.height - y0);
-      const image = p.getImageData(x0, y0, w, h), d = image.data;
-      const seen = new Uint8Array(w * h), queue = new Int32Array(w * h);
-      let head = 0, tail = 0;
-      const pale = i => {
-        const a=d[i*4+3], r=d[i*4], gg=d[i*4+1], b=d[i*4+2];
-        return a > 0 && Math.min(r,gg,b) > 100 && Math.max(r,gg,b)-Math.min(r,gg,b) < 48;
-      };
-      const add = i => { if (!seen[i] && pale(i)) { seen[i]=1; queue[tail++]=i; } };
-      for(let xx=0;xx<w;xx++){add(xx);add((h-1)*w+xx)}
-      for(let yy=1;yy<h-1;yy++){add(yy*w);add(yy*w+w-1)}
-      while(head<tail){
-        const i=queue[head++], xx=i%w, yy=(i/w)|0;
-        if(xx)add(i-1); if(xx<w-1)add(i+1); if(yy)add(i-w); if(yy<h-1)add(i+w);
-      }
-      for(let i=0;i<seen.length;i++){const base=i*4, neutral=Math.max(d[base],d[base+1],d[base+2])-Math.min(d[base],d[base+1],d[base+2]);if(seen[i]||(((i/w)|0)>h-34&&Math.min(d[base],d[base+1],d[base+2])>100&&neutral<60))d[base+3]=0;}
-      p.putImageData(image,x0,y0);
-    }
-    cleanedAtlas=work;
-  });
-
   function draw(g, enemy, fall, blink) {
     const {x, animation = 'idle'} = enemy;
     const state = fall ? 'defeated' : animation;
@@ -230,12 +199,9 @@
     const cellW = 256, cellH = 256;
     ellipse(g, x, ground + 3, 43 + (fall ? 24 : 0), 8, '#573d2e55');
     g.save();
-    if (cleanedAtlas || (atlas.complete && atlas.naturalWidth)) {
-      // Mirror the atlas so Goliath faces David on the left; remove pale edge-connected sheet fragments per frame.
-      const sheet = cleanedAtlas || atlas;
-      g.translate(2*x, 0);
-      g.scale(-1, 1);
-      g.drawImage(sheet, frame * cellW, row * cellH, cellW, cellH,
+    if (atlas.complete && atlas.naturalWidth) {
+      // Atlas frames face left toward David and have clean transparent edges.
+      g.drawImage(atlas, frame * cellW, row * cellH, cellW, cellH,
         x - 128, ground - 256, cellW, cellH);
     } else if (sprite.naturalWidth) {
       g.drawImage(sprite, x - spriteWidth / 2, ground - spriteHeight, spriteWidth, spriteHeight);
