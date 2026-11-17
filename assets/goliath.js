@@ -4,7 +4,7 @@
   const rig = new Image();
   rig.src = 'assets/goliath-rig.webp';
   const atlas = new Image();
-  atlas.src = 'assets/goliath-v08/goliath-v08-atlas.webp?v=11';
+  atlas.src = 'assets/goliath-v08/goliath-v08-transparent.png?v=1';
   const animationFrames = {idle:4,walk:4,shield:4,thrust:5,defeated:4,victory:3};
   const animationRows = {idle:0,walk:1,shield:2,thrust:3,defeated:4,victory:5};
   const ground = 462;
@@ -13,6 +13,7 @@
   const opensAt = 1690;
   const closesAt = 3290;
   const raisedAt = 3710;
+  const walkDuration = 800;
   const startX = 828;
   const stride = 30;
   const stopX = 582;
@@ -40,13 +41,13 @@
     const elapsed = Math.max(0, at - startedAt);
     const cycle = Math.floor(elapsed / turn);
     const beat = elapsed % turn;
-    const stepProgress = ease(beat / 720);
+    const stepProgress = ease(beat / walkDuration);
     const step = stepProgress;
     const x = Math.max(stopX, startX - stride * (cycle + step));
-    const gait = startX - stride * cycle > stopX ? (beat < 720 ? stepProgress : 1) : 1;
+    const gait = startX - stride * cycle > stopX ? (beat < walkDuration ? stepProgress : 1) : 1;
     const phase = gait * Math.PI * 2;
     const strideWeight = Math.sin(Math.PI * gait);
-    const walkBob = beat < 720 ? -Math.sin(Math.PI * stepProgress) * 2.5 : 0;
+    const walkBob = beat < walkDuration ? -Math.sin(Math.PI * stepProgress) * 2.5 : 0;
     const open = beat >= opensAt && beat < closesAt;
     const drop = beat < opensAt ? ease((beat - lowerAt) / (opensAt - lowerAt))
       : 1 - ease((beat - closesAt) / (raisedAt - closesAt));
@@ -68,8 +69,19 @@
       [frontLeg[2][0] + Math.sin(phase) * strideWeight * 34, frontLeg[2][1] - bob * 2 - Math.max(0, Math.cos(phase)) * strideWeight * 23],
       [backLeg[2][0] - Math.sin(phase) * strideWeight * 30, backLeg[2][1] - bob * 2 - Math.max(0, -Math.cos(phase)) * strideWeight * 25]
     ];
-    const animation = beat >= lowerAt && beat < opensAt ? 'shield' : beat >= closesAt && beat < raisedAt ? 'shield' : beat < 720 && x > stopX + 1 ? 'walk' : 'idle';
-    return {x, bob, brow, open, shield, grip, feet, animation, beat, cycle};
+    let animation = 'idle';
+    let animationProgress = 0;
+    if (beat >= lowerAt && beat < opensAt) {
+      animation = 'shield';
+      animationProgress = 1 - ease((beat - lowerAt) / (opensAt - lowerAt));
+    } else if (beat >= closesAt && beat < raisedAt) {
+      animation = 'shield';
+      animationProgress = ease((beat - closesAt) / (raisedAt - closesAt));
+    } else if (beat < walkDuration && x > stopX + 1) {
+      animation = 'walk';
+      animationProgress = beat / walkDuration;
+    }
+    return {x, bob, brow, open, shield, grip, feet, animation, animationProgress, beat, cycle};
   }
 
   function inside(x, y, center, rx, ry) {
@@ -193,15 +205,32 @@
     const state = fall ? 'defeated' : animation;
     const count = animationFrames[state] || 4;
     let frame;
-    if (state === 'defeated') frame = Math.min(count - 1, Math.floor(fall * count));
-    else if (state === 'shield' && enemy.open) frame = 0;
-    else frame = Math.floor(blink / (state === 'idle' ? 320 : state === 'walk' ? 190 : 240)) % count;
+    if (state === 'defeated') {
+      frame = Math.min(count - 1, Math.floor(clamp(fall) * count));
+    } else if (state === 'walk') {
+      // One full 4-frame gait plays during the same 800 ms as Goliath's deliberate step.
+      frame = Math.min(count - 1, Math.floor(clamp(enemy.animationProgress ?? 0) * count));
+    } else if (state === 'thrust') {
+      // The playable duel's 450 ms spear lunge drives all five attack poses in sequence.
+      const progress = Number.isFinite(enemy.cycle) ? clamp((enemy.cycle - 1160) / 450) : ((blink % 450) / 450);
+      frame = Math.min(count - 1, Math.floor(progress * count));
+    } else if (state === 'shield') {
+      let progress = enemy.animationProgress ?? 0;
+      if (enemy.open || enemy.attack === 'open') progress = 0;
+      else if (enemy.attack === 'tell') progress = ease((enemy.cycle - 720) / 440);
+      else if (enemy.attack === 'recover') progress = ease((enemy.cycle - 3250) / 570);
+      frame = Math.min(count - 1, Math.floor(clamp(progress) * count));
+    } else if (state === 'victory') {
+      frame = Math.floor(blink / 360) % count;
+    } else {
+      frame = Math.floor(blink / 440) % count;
+    }
     const row = animationRows[state] ?? 0;
     const cellW = 256, cellH = 256;
     ellipse(g, x, ground + 3, 43 + (fall ? 24 : 0), 8, '#573d2e55');
     g.save();
     if (atlas.complete && atlas.naturalWidth) {
-      // Atlas frames face left toward David and have clean transparent edges.
+      // Atlas frames face right; mirror them so Goliath faces David. The cleaned PNG preserves true transparency.
       g.translate(2*x,0);
       g.scale(-1,1);
       g.drawImage(atlas, frame * cellW, row * cellH, cellW, cellH,
