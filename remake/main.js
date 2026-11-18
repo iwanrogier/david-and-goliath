@@ -1,5 +1,6 @@
 import { LEVEL, INTRO } from './level.js';
 import { createState, tick, fire, STEP, clamp, readSave, saveProgress } from './simulation.js';
+import { capturePositions } from './animation.js';
 import { createRenderer, loadArt } from './render.js';
 import { createAudio } from './audio.js';
 
@@ -15,6 +16,7 @@ let storage;
 try { storage = window.localStorage; } catch {}
 const saved = readSave(storage, LEVEL);
 let state = createState(LEVEL);
+let previousPositions = null;
 let renderer, mode = 'loading', intro = 0, jumpQueued = false, aim = null;
 let noticeUntil = 0, frameTime = 0, accumulator = 0, lastFootstep = 0, ravineTip = false;
 
@@ -77,6 +79,7 @@ function start(checkpoint = null) {
   audio.enable();
   state = createState(LEVEL, checkpoint);
   lastFootstep = 0;
+  previousPositions = null;
   ravineTip = !!checkpoint;
   accumulator = 0;
   renderer.draw(state, null, 0, true);
@@ -292,6 +295,7 @@ function frame(time) {
     const actions = new Set(held.values());
     const move = Number(actions.has('right')) - Number(actions.has('left'));
     while (accumulator >= STEP && (mode === 'play' || mode === 'defeat')) {
+      previousPositions = capturePositions(state);
       tick(state, { move, run: actions.has('run'), jump: jumpQueued, aim: !!aim });
       jumpQueued = false;
       accumulator -= STEP;
@@ -314,7 +318,8 @@ function frame(time) {
       hud();
     }
   }
-  renderer.draw(state, currentAim, dt);
+  const live = mode === 'play' || mode === 'defeat';
+  renderer.draw(state, currentAim, dt, false, live ? previousPositions : null, accumulator / STEP);
   requestAnimationFrame(frame);
 }
 

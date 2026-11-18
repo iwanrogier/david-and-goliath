@@ -1,24 +1,31 @@
 import { clamp, shotPoint, shotVector, CAST_TIME } from './simulation.js';
+import { actionFrame, advanceAnimation, createAnimation, cycleFrame, samplePosition } from './animation.js';
 const HEIGHT = 540;
 const ZOOM = 1.27;
 const VIEW_HEIGHT = HEIGHT / ZOOM;
 const CROP_TOP = 78;
 
+// Cells share a ground pivot and a fixed two-pixels-per-world-unit scale.
+const SHEETS = {
+  davidWalkFrames: [160, 168, 80, 150],
+  davidRunFrames: [160, 168, 80, 150],
+  davidActionFrames: [192, 168, 88, 150],
+  animalMoveFrames: [224, 128, 108, 108],
+  animalActionFrames: [224, 128, 108, 108],
+};
+
 const FILES = [
   'bethlehem', 'terrain', 'olive', 'fold', 'rocks', 'grass', 'wall',
-  'idle', 'jump', 'aim', 'sheep', 'wolf',
-  'fall0', 'fall1', 'fall2', 'fall3', 'slingLoad', 'slingWind', 'slingRelease', 'slingRecover',
-  'walk0', 'walk1', 'walk2', 'walk3', 'run0', 'run1', 'run2', 'run3',
-  'wolf0', 'wolf1', 'wolfTell', 'wolfLeap', 'sheep0', 'sheep1', 'sheepGraze', 'sheepLeap',
+  'aim', 'fall0', 'fall1', 'fall2', 'fall3', 'slingLoad', 'slingRelease', 'slingRecover',
+  ...Object.keys(SHEETS),
 ];
 
-const DAVID = {
-  idle: [72, .48], jump: [64, .52], aim: [72, .49],
-  fall0: [70, .53], fall1: [62, .55], fall2: [49, .54], fall3: [23, .52],
-  slingLoad: [70, .52], slingWind: [73, .49], slingRelease: [73, .41], slingRecover: [70, .49],
-  walk0: [71, .49], walk1: [71, .52], walk2: [71, .49], walk3: [71, .52],
-  run0: [66, .51], run1: [66, .52], run2: [66, .51], run3: [66, .52],
-};
+const WALK = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const RUN = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const REST = [0, 1, 2, 3, 2, 1];
+const SHEEP_WALK = [0, 1, 2, 3];
+const WOLF_WALK = [4, 5, 6, 7];
+const WOLF_RUN = [8, 9, 10, 11];
 
 export async function loadArt() {
   const pairs = await Promise.all(FILES.map(async name => {
@@ -33,7 +40,7 @@ export async function loadArt() {
 export function createRenderer(canvas, art) {
   const ctx = canvas.getContext('2d', { alpha: false });
   let ratio = 1, scale = 1, width = 960, top = 0;
-  let camera = 0, shakeX = 0, shakeY = 0;
+  let camera = 0, shakeX = 0, shakeY = 0, animations;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
   function resize() {
@@ -100,74 +107,123 @@ export function createRenderer(canvas, art) {
     ctx.restore();
   }
 
-  function sprite(name, x, y, h, dir, anchor = .5, alpha = 1, tilt = 0) {
+  function sprite(name, x, y, h, dir, pivot) {
     const texture = art[name];
     const w = h * texture.width / texture.height;
     ctx.save();
-    ctx.globalAlpha = alpha;
     ctx.translate(x, y);
     ctx.scale(dir, 1);
-    ctx.rotate(tilt);
-    ctx.drawImage(texture, -anchor * w, -h, w, h);
+    ctx.drawImage(texture, -pivot * w, -h, w, h);
     ctx.restore();
   }
 
-  function david(state, aim) {
-    const p = state.david;
-    const paces = Math.abs(p.vx);
-    const walking = paces > 27;
-    const fast = paces > 236;
-    const stride = fast ? 87 : 68;
-    const step = Math.floor(p.gait * 4 / stride) % 4;
-    const defeat = state.defeat;
-    const recovery = CAST_TIME - p.cast;
-    let pose = walking ? (fast ? 'run' : 'walk') + step : 'idle';
-    if (p.climb || !p.grounded) pose = 'jump';
-    if (aim && state.stones && !p.climb) {
-      pose = aim.elapsed < .105 ? 'slingLoad' : aim.elapsed < .21 ? 'aim' : 'slingWind';
-    }
-    if (p.cast > 0) pose = recovery < .105 ? 'slingRelease' : 'slingRecover';
+  function sheetFrame(name, frame, x, y, dir) {
+    const [w, h, px, py] = SHEETS[name];
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(dir, 1);
+    ctx.drawImage(art[name], frame % 4 * w, Math.floor(frame / 4) * h, w, h,
+      -px / 2, -py / 2, w / 2, h / 2);
+    ctx.restore();
+  }
+
+  function david(state, p, aim, time) {
+    const { defeat } = state;
+    const dir = defeat?.dir ?? (aim && !p.cast ? (aim.target.x >= p.x ? 1 : -1) :
+      Math.abs(p.vx) > 24 && !p.cast ? Math.sign(p.vx) : p.dir);
+    const animation = advanceAnimation(animations.david, p, time, {
+      walk: 101, run: 132, fastAt: 248, grounded: p.grounded && !p.climb,
+      backwards: dir * p.vx < -12,
+    });
+    const x = p.x, y = p.y + 1;
+    if (p.grounded) oval(x, y, defeat && defeat.elapsed > .48 ? 37 : 19, 4, '#271a1370');
+
     if (defeat) {
       const t = defeat.elapsed;
-      pose = t < .16 ? 'fall0' : t < .32 ? 'fall1' : t < .48 || !p.grounded ? 'fall2' : 'fall3';
+      if (t < .16) sprite('fall0', x, y, 70, dir, .53);
+      else if (t < .32) sprite('fall1', x, y, 62, dir, .55);
+      else if (t < .48 || !p.grounded) sprite('fall2', x, y, 49, dir, .54);
+      else sprite('fall3', x, y, 23, dir, .52);
+      return;
     }
-    const [h, anchor] = DAVID[pose];
-    const bounce = pose === 'idle' ? Math.sin(state.clock * 2.4) * .6 : 0;
-    if (p.grounded) oval(p.x, p.y + 1, pose === 'fall3' ? 37 : 19, 4, '#271a1370');
-    const direction = defeat?.dir ?? (aim && !p.cast ? (aim.target.x >= p.x ? 1 : -1) : p.dir);
-    const alpha = p.immune && Math.floor(state.clock * 15) % 2 ? .55 : 1;
-    const windTilt = pose === 'slingWind' && aim ? .042 * Math.sin(aim.elapsed * 28) : 0;
-    const fallTilt = defeat && pose !== 'fall3' ? -.08 * Math.sin(defeat.elapsed * 8) : 0;
-    sprite(pose, p.x, p.y + 2 + bounce, h, direction, anchor, alpha,
-      pose === 'jump' ? clamp(p.vy / 7400, -.05, .05) : windTilt + fallTilt);
+    if (time - animation.hurt < .13) {
+      sprite('fall0', x, y, 70, dir, .53);
+      return;
+    }
+    if (p.cast > 0) {
+      const recovery = CAST_TIME - p.cast;
+      if (recovery < .075) sprite('slingRelease', x, y, 73, dir, .41);
+      else if (recovery < .16) sheetFrame('davidActionFrames', 11, x, y, dir);
+      else sprite('slingRecover', x, y, 70, dir, .49);
+      return;
+    }
+    if (aim && state.stones && !p.climb) {
+      if (aim.elapsed < .105) sprite('slingLoad', x, y, 70, dir, .52);
+      else if (aim.elapsed < .215) sprite('aim', x, y, 72, dir, .49);
+      else sheetFrame('davidActionFrames', 10, x, y, dir);
+      return;
+    }
+    if (p.climb || !p.grounded) {
+      const frame = p.climb ? actionFrame([4, 5, 6, 9], .34 - p.climb, .34) :
+        p.vy < -425 ? 4 : p.vy < -150 ? 5 : p.vy < 110 ? 6 : 7;
+      sheetFrame('davidActionFrames', frame, x, y, dir);
+      return;
+    }
+    const sinceLanding = time - animation.landed;
+    if (sinceLanding < .13) {
+      sheetFrame('davidActionFrames', sinceLanding < .052 ? 8 : 9, x, y, dir);
+      return;
+    }
+    if (animation.speed > 24) {
+      sheetFrame(animation.fast ? 'davidRunFrames' : 'davidWalkFrames',
+        cycleFrame(animation.fast ? RUN : WALK, animation.phase), x, y, dir);
+      return;
+    }
+    sheetFrame('davidActionFrames', cycleFrame(REST, time / 3.6), x, y, dir);
   }
 
-  function animals(state) {
-    for (const [i, sheep] of state.flock.entries()) {
+  function animals(state, previous, alpha, time) {
+    for (const [i, actor] of state.flock.entries()) {
+      const sheep = samplePosition(actor, previous?.flock[i], alpha);
+      const animation = advanceAnimation(animations.flock[i], sheep, time, { walk: 68, grounded: sheep.grounded });
       if (sheep.x < camera - 100 || sheep.x > camera + width + 100) continue;
-      const moving = sheep.found && Math.abs(sheep.vx) > 18;
-      const frame = Math.floor(sheep.gait / 18) % 2;
-      const pose = sheep.found && !sheep.grounded ? 'sheepLeap' : moving ? 'sheep' + frame :
-        Math.sin(state.clock + i * 2) > .28 ? 'sheepGraze' : 'sheep';
-      if (!sheep.found || sheep.grounded) oval(sheep.x, sheep.y + 1, 24, 4, '#271a135d');
-      sprite(pose, sheep.x, sheep.y + 2, pose === 'sheepGraze' ? 37 : 43, sheep.dir);
-      if (!sheep.found) marker(sheep.x, sheep.y - 59, state.clock, '#ffe5ac');
+      const x = sheep.x, y = sheep.y + 1;
+      if (sheep.grounded) oval(x, y, 24, 4, '#271a135d');
+      if (sheep.found && !sheep.grounded) {
+        sheetFrame('animalActionFrames', sheep.vy < 125 ? 2 : 3, x, y, sheep.dir);
+      } else if (time - animation.landed < .085) {
+        sheetFrame('animalActionFrames', 3, x, y, sheep.dir);
+      } else if (sheep.found && animation.speed > 15) {
+        sheetFrame('animalMoveFrames', cycleFrame(SHEEP_WALK, animation.phase), x, y, sheep.dir);
+      } else {
+        sheetFrame('animalActionFrames', Math.sin(time * .65 + i * 2.1) > .68 ? 1 : 0, x, y, sheep.dir);
+      }
+      if (!sheep.found) marker(x, sheep.y - 59, time, '#ffe5ac');
     }
-    const w = state.wolf;
-    if (!w.hp && w.x >= 2848) return;
-    const moving = w.phase === 'patrol' || w.phase === 'flee';
-    const frame = Math.floor(w.gait / 20) % 2;
-    const pose = w.phase === 'lunge' ? 'wolfLeap' : (w.phase === 'tell' || w.phase === 'recoil') ? 'wolfTell' : moving ? 'wolf' + frame : 'wolf';
-    const alpha = w.phase === 'flee' ? clamp((2850 - w.x) / 130, 0, 1) : 1;
+
+    const wolf = samplePosition(state.wolf, previous?.wolf, alpha);
+    if (!wolf.hp && wolf.x >= 2848) return;
+    const animation = advanceAnimation(animations.wolf, wolf, time, { walk: 72, run: 127, fastAt: 170 });
+    const x = wolf.x, y = wolf.y + 1;
     ctx.save();
-    ctx.globalAlpha = alpha;
-    oval(w.x, w.y + 1, 35, 5, '#271a1373');
+    ctx.globalAlpha = wolf.phase === 'flee' ? clamp((2850 - x) / 130, 0, 1) : 1;
+    oval(x, y, 35, 5, '#271a1373');
+    if (wolf.phase === 'tell') {
+      sheetFrame('animalActionFrames', wolf.next - time > .32 ? 4 : 5, x, y, wolf.dir);
+    } else if (wolf.phase === 'lunge') {
+      sheetFrame('animalActionFrames', actionFrame([5, 6, 6, 7], .36 - (wolf.next - time), .36), x, y, wolf.dir);
+    } else if (wolf.phase === 'recoil') {
+      sheetFrame('animalActionFrames', wolf.recoil > .105 ? 7 : 5, x, y, wolf.dir);
+    } else if (wolf.phase === 'recover') {
+      sheetFrame('animalActionFrames', wolf.next - time > .73 ? 7 : 4, x, y, wolf.dir);
+    } else if (animation.speed > 15) {
+      const frames = animation.fast || wolf.phase === 'flee' ? WOLF_RUN : WOLF_WALK;
+      sheetFrame('animalMoveFrames', cycleFrame(frames, animation.phase), x, y, wolf.dir);
+    } else {
+      sheetFrame('animalActionFrames', 4, x, y, wolf.dir);
+    }
     ctx.restore();
-    const height = pose === 'wolfTell' || pose === 'wolfLeap' ? 40 : 47;
-    const recoil = w.recoil / .24;
-    sprite(pose, w.x, w.y + 2 - 7 * recoil, height, w.dir, .51, alpha,
-      -Math.sign(w.impulse) * w.dir * recoil * .14);
-    if (w.phase === 'tell' && w.hp) marker(w.x, w.y - 62, state.clock * 3, '#ff9554');
+    if (wolf.phase === 'tell' && wolf.hp) marker(x, wolf.y - 62, time * 3, '#ff9554');
   }
 
   function marker(x, y, time, color) {
@@ -200,11 +256,16 @@ export function createRenderer(canvas, art) {
     ctx.restore();
   }
 
-  function draw(state, aimForFrame, frameDt, snap = false) {
-    const { level, david: p } = state;
+  function draw(state, aimForFrame, frameDt, snap = false, previous = null, alpha = 1) {
+    if (snap || !animations) animations = {
+      david: createAnimation(), wolf: createAnimation(), flock: state.flock.map(createAnimation),
+    };
+    const { level } = state;
+    const p = samplePosition(state.david, previous?.david, alpha);
+    const time = previous ? previous.clock + (state.clock - previous.clock) * alpha : state.clock;
     const previousAim = aimForFrame?.();
     const focus = previousAim?.cameraDirection ??
-      (previousAim ? Math.sign(previousAim.target.x - p.x) || p.dir : p.dir);
+      (previousAim ? Math.sign(previousAim.target.x - p.x) || p.dir : Math.abs(p.vx) > 24 ? Math.sign(p.vx) : p.dir);
     const forward = previousAim ? .24 : .35;
     const anchor = focus === 1 ? forward : 1 - forward;
     const wanted = clamp(p.x - width * anchor, 0, Math.max(0, level.width - width));
@@ -237,14 +298,14 @@ export function createRenderer(canvas, art) {
     }
     if (!state.checkpoint) marker(level.checkpoint.x, level.checkpoint.y - 77, state.clock, '#ffd589');
     if (!state.wolf.hp && state.flock.every(sheep => sheep.found)) marker(level.exit.x, level.exit.y - 132, state.clock, '#ffeac0');
-    animals(state);
-    david(state, aim);
+    animals(state, previous, alpha, time);
+    david(state, p, aim, time);
     for (const [name, x, y, w] of level.scenery) {
       if (name === 'grass' && x + w > camera && x - w < camera + width) scenery(name, x, y + 13, w * .57);
     }
     for (const platform of level.platforms) terrain(platform, true);
     if (aim && state.stones) {
-      const forecast = shotVector(p, aim.target, aim.power);
+      const forecast = shotVector(state.david, aim.target, aim.power);
       for (let i = 1; i <= 12; i++) {
         const point = shotPoint(forecast, i * .037);
         if (level.platforms.some(platform => point.x > platform.x && point.x < platform.end && point.y >= platform.y)) break;
