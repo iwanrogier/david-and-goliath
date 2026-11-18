@@ -1,13 +1,24 @@
 import { clamp, shotPoint, shotVector, CAST_TIME } from './simulation.js';
-import { damp, mix, locomotion, sampleBody, updateLocomotion } from './motion.js';
-import { createRigs, paintAnimal, paintDavid } from './rigs.js';
 const HEIGHT = 540;
 const ZOOM = 1.27;
 const VIEW_HEIGHT = HEIGHT / ZOOM;
 const CROP_TOP = 78;
 
-const FILES = ['bethlehem', 'terrain', 'olive', 'fold', 'rocks', 'grass', 'wall',
-  'idle', 'slingWind', 'sheep', 'wolf'];
+const FILES = [
+  'bethlehem', 'terrain', 'olive', 'fold', 'rocks', 'grass', 'wall',
+  'idle', 'jump', 'aim', 'sheep', 'wolf',
+  'fall0', 'fall1', 'fall2', 'fall3', 'slingLoad', 'slingWind', 'slingRelease', 'slingRecover',
+  'walk0', 'walk1', 'walk2', 'walk3', 'run0', 'run1', 'run2', 'run3',
+  'wolf0', 'wolf1', 'wolfTell', 'wolfLeap', 'sheep0', 'sheep1', 'sheepGraze', 'sheepLeap',
+];
+
+const DAVID = {
+  idle: [72, .48], jump: [64, .52], aim: [72, .49],
+  fall0: [70, .53], fall1: [62, .55], fall2: [49, .54], fall3: [23, .52],
+  slingLoad: [70, .52], slingWind: [73, .49], slingRelease: [73, .41], slingRecover: [70, .49],
+  walk0: [71, .49], walk1: [71, .52], walk2: [71, .49], walk3: [71, .52],
+  run0: [66, .51], run1: [66, .52], run2: [66, .51], run3: [66, .52],
+};
 
 export async function loadArt() {
   const pairs = await Promise.all(FILES.map(async name => {
@@ -22,9 +33,7 @@ export async function loadArt() {
 export function createRenderer(canvas, art) {
   const ctx = canvas.getContext('2d', { alpha: false });
   let ratio = 1, scale = 1, width = 960, top = 0;
-  let camera = 0, shakeX = 0, shakeY = 0, viewBias = .15;
-  let visualTime = 0, actors;
-  const rigs = createRigs(art);
+  let camera = 0, shakeX = 0, shakeY = 0;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
   function resize() {
@@ -91,58 +100,74 @@ export function createRenderer(canvas, art) {
     ctx.restore();
   }
 
-  function david(state, p, aim, time, dt) {
-    const anim = actors.david;
-    const defeat = state.defeat;
-    const direction = defeat?.dir ?? (aim && !p.cast ? Math.sign(aim.target.x - p.x) || p.dir :
-      Math.abs(p.vx) > 25 && !p.cast ? Math.sign(p.vx) : p.dir);
-    const phaseBefore = anim.phase;
-    updateLocomotion(anim, p, dt, {
-      walkStride: 88, runStride: 132, runAt: 195, sprintAt: 325,
-      airborne: !p.grounded || !!p.climb, face: direction, advance: !defeat, reverse: p.vx * direction < -8,
-    });
-    if (p.grounded) {
-      const down = defeat ? Math.min(1, defeat.elapsed / .55) : 0;
-      oval(p.x, p.y + 1, mix(19, 39, down), 4, '#271a1370');
-    }
+  function sprite(name, x, y, h, dir, anchor = .5, alpha = 1, tilt = 0) {
+    const texture = art[name];
+    const w = h * texture.width / texture.height;
     ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.scale(anim.direction, 1);
-    paintDavid(ctx, rigs.david, p, anim, state, aim && state.stones ? aim : null, CAST_TIME, time);
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.scale(dir, 1);
+    ctx.rotate(tilt);
+    ctx.drawImage(texture, -anchor * w, -h, w, h);
     ctx.restore();
-    return !defeat && p.grounded && anim.activity > .48 &&
-      Math.floor(phaseBefore * 2) !== Math.floor(anim.phase * 2);
   }
 
-  function animals(state, last, alpha, time, dt) {
-    for (const [i, sheep] of state.flock.entries()) {
-      const body = sampleBody(sheep, last?.flock[i], alpha);
-      const anim = actors.flock[i];
-      updateLocomotion(anim, body, dt, { walkStride: 62, runStride: 110, runAt: 70, sprintAt: 260 });
-      if (body.x < camera - 100 || body.x > camera + width + 100) continue;
-      if (!body.found || body.grounded) oval(body.x, body.y + 1, 24, 4, '#271a135d');
-      ctx.save();
-      ctx.translate(body.x, body.y);
-      ctx.scale(anim.direction, 1);
-      paintAnimal(ctx, rigs.sheep, body, anim, time, dt, false, i);
-      ctx.restore();
-      if (!body.found) marker(body.x, body.y - 59, time, '#ffe5ac');
+  function david(state, aim) {
+    const p = state.david;
+    const paces = Math.abs(p.vx);
+    const walking = paces > 27;
+    const fast = paces > 236;
+    const stride = fast ? 87 : 68;
+    const step = Math.floor(p.gait * 4 / stride) % 4;
+    const defeat = state.defeat;
+    const recovery = CAST_TIME - p.cast;
+    let pose = walking ? (fast ? 'run' : 'walk') + step : 'idle';
+    if (p.climb || !p.grounded) pose = 'jump';
+    if (aim && state.stones && !p.climb) {
+      pose = aim.elapsed < .105 ? 'slingLoad' : aim.elapsed < .21 ? 'aim' : 'slingWind';
     }
-    const w = sampleBody(state.wolf, last?.wolf, alpha);
+    if (p.cast > 0) pose = recovery < .105 ? 'slingRelease' : 'slingRecover';
+    if (defeat) {
+      const t = defeat.elapsed;
+      pose = t < .16 ? 'fall0' : t < .32 ? 'fall1' : t < .48 || !p.grounded ? 'fall2' : 'fall3';
+    }
+    const [h, anchor] = DAVID[pose];
+    const bounce = pose === 'idle' ? Math.sin(state.clock * 2.4) * .6 : 0;
+    if (p.grounded) oval(p.x, p.y + 1, pose === 'fall3' ? 37 : 19, 4, '#271a1370');
+    const direction = defeat?.dir ?? (aim && !p.cast ? (aim.target.x >= p.x ? 1 : -1) : p.dir);
+    const alpha = p.immune && Math.floor(state.clock * 15) % 2 ? .55 : 1;
+    const windTilt = pose === 'slingWind' && aim ? .042 * Math.sin(aim.elapsed * 28) : 0;
+    const fallTilt = defeat && pose !== 'fall3' ? -.08 * Math.sin(defeat.elapsed * 8) : 0;
+    sprite(pose, p.x, p.y + 2 + bounce, h, direction, anchor, alpha,
+      pose === 'jump' ? clamp(p.vy / 7400, -.05, .05) : windTilt + fallTilt);
+  }
+
+  function animals(state) {
+    for (const [i, sheep] of state.flock.entries()) {
+      if (sheep.x < camera - 100 || sheep.x > camera + width + 100) continue;
+      const moving = sheep.found && Math.abs(sheep.vx) > 18;
+      const frame = Math.floor(sheep.gait / 18) % 2;
+      const pose = sheep.found && !sheep.grounded ? 'sheepLeap' : moving ? 'sheep' + frame :
+        Math.sin(state.clock + i * 2) > .28 ? 'sheepGraze' : 'sheep';
+      if (!sheep.found || sheep.grounded) oval(sheep.x, sheep.y + 1, 24, 4, '#271a135d');
+      sprite(pose, sheep.x, sheep.y + 2, pose === 'sheepGraze' ? 37 : 43, sheep.dir);
+      if (!sheep.found) marker(sheep.x, sheep.y - 59, state.clock, '#ffe5ac');
+    }
+    const w = state.wolf;
     if (!w.hp && w.x >= 2848) return;
-    const anim = actors.wolf;
-    const walking = w.phase === 'patrol' || w.phase === 'flee';
-    updateLocomotion(anim, w, dt, {
-      walkStride: 77, runStride: 128, runAt: 42, sprintAt: 295, airborne: false, advance: walking,
-    });
+    const moving = w.phase === 'patrol' || w.phase === 'flee';
+    const frame = Math.floor(w.gait / 20) % 2;
+    const pose = w.phase === 'lunge' ? 'wolfLeap' : (w.phase === 'tell' || w.phase === 'recoil') ? 'wolfTell' : moving ? 'wolf' + frame : 'wolf';
+    const alpha = w.phase === 'flee' ? clamp((2850 - w.x) / 130, 0, 1) : 1;
     ctx.save();
-    ctx.globalAlpha = w.phase === 'flee' ? clamp((2850 - w.x) / 130, 0, 1) : 1;
+    ctx.globalAlpha = alpha;
     oval(w.x, w.y + 1, 35, 5, '#271a1373');
-    ctx.translate(w.x, w.y);
-    ctx.scale(anim.direction, 1);
-    paintAnimal(ctx, rigs.wolf, w, anim, time, dt, true);
     ctx.restore();
-    if (w.phase === 'tell' && w.hp) marker(w.x, w.y - 62, time * 3, '#ff9554');
+    const height = pose === 'wolfTell' || pose === 'wolfLeap' ? 40 : 47;
+    const recoil = w.recoil / .24;
+    sprite(pose, w.x, w.y + 2 - 7 * recoil, height, w.dir, .51, alpha,
+      -Math.sign(w.impulse) * w.dir * recoil * .14);
+    if (w.phase === 'tell' && w.hp) marker(w.x, w.y - 62, state.clock * 3, '#ff9554');
   }
 
   function marker(x, y, time, color) {
@@ -175,23 +200,15 @@ export function createRenderer(canvas, art) {
     ctx.restore();
   }
 
-  function draw(state, aimForFrame, frameDt, snap = false, last = null, alpha = 1) {
-    if (snap || !actors) {
-      actors = { david: locomotion(), wolf: locomotion(), flock: state.flock.map(locomotion) };
-      visualTime = state.clock;
-    }
-    const { level } = state;
-    const p = sampleBody(state.david, last?.david, alpha);
-    const time = last ? mix(last.clock, state.clock, alpha) : state.clock;
-    const dt = Math.max(0, time - visualTime);
-    visualTime = time;
+  function draw(state, aimForFrame, frameDt, snap = false) {
+    const { level, david: p } = state;
     const previousAim = aimForFrame?.();
     const focus = previousAim?.cameraDirection ??
-      (previousAim ? Math.sign(previousAim.target.x - p.x) || p.dir : Math.abs(p.vx) > 25 ? Math.sign(p.vx) : p.dir);
-    const desiredBias = focus * (previousAim ? .26 : .15);
-    viewBias = snap ? desiredBias : damp(viewBias, desiredBias, frameDt, 6);
-    const wanted = clamp(p.x - width * (.5 - viewBias), 0, Math.max(0, level.width - width));
-    camera = snap ? wanted : damp(camera, wanted, frameDt, 8.5);
+      (previousAim ? Math.sign(previousAim.target.x - p.x) || p.dir : p.dir);
+    const forward = previousAim ? .24 : .35;
+    const anchor = focus === 1 ? forward : 1 - forward;
+    const wanted = clamp(p.x - width * anchor, 0, Math.max(0, level.width - width));
+    camera = snap ? wanted : camera + (wanted - camera) * (1 - Math.exp(-frameDt * 7));
     const hit = reducedMotion.matches ? null : state.effects.findLast(effect =>
       effect.kind === 'wolf' && state.clock - effect.born < .16);
     const pulse = hit ? (state.clock - hit.born) / .16 : 1;
@@ -220,8 +237,8 @@ export function createRenderer(canvas, art) {
     }
     if (!state.checkpoint) marker(level.checkpoint.x, level.checkpoint.y - 77, state.clock, '#ffd589');
     if (!state.wolf.hp && state.flock.every(sheep => sheep.found)) marker(level.exit.x, level.exit.y - 132, state.clock, '#ffeac0');
-    animals(state, last, alpha, time, dt);
-    const footstep = david(state, p, aim, time, dt);
+    animals(state);
+    david(state, aim);
     for (const [name, x, y, w] of level.scenery) {
       if (name === 'grass' && x + w > camera && x - w < camera + width) scenery(name, x, y + 13, w * .57);
     }
@@ -283,7 +300,6 @@ export function createRenderer(canvas, art) {
     vignette.addColorStop(1, '#261b1559');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, width, HEIGHT);
-    return footstep;
   }
 
   return { resize, draw, worldPoint };

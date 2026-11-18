@@ -36,7 +36,7 @@ export function createState(level, checkpoint = null) {
   const { x, y } = checkpoint ? level.checkpoint : level.spawn;
   return {
     level, checkpoint, clock: 0, complete: false, dead: false, defeat: null,
-    david: { x, y, vx: 0, vy: 0, dir: 1, grounded: true, hearts: 3, immune: 0, hurtAt: -Infinity, gait: 0, cast: 0, climb: 0, buffer: 0, grace: 0 },
+    david: { x, y, vx: 0, vy: 0, dir: 1, grounded: true, hearts: 3, immune: 0, gait: 0, cast: 0, climb: 0, buffer: 0, grace: 0 },
     stones: checkpoint?.stones ?? 5, flock: level.sheep.map((s, i) => ({
       ...s, found: checkpoint?.flock[i] ?? false, x: checkpoint?.flock[i] ? x - 45 - 35 * i : s.x,
       y: checkpoint?.flock[i] ? y : s.y, vx: 0, vy: 0, grounded: true, hop: false, dir: 1, gait: 0,
@@ -183,17 +183,14 @@ function updateWolf(state, dt) {
     if (wolf.x > level.wolf.x + 120) wolf.dir = -1;
     speed = 42 * wolf.dir;
   }
-  const beforeX = wolf.x;
   wolf.x = clamp(wolf.x + speed * dt, 1748, wolf.hp ? 2535 : 2850);
   const surface = floorAt(level, wolf.x).find(platform => platform.y >= 380);
   if (surface) wolf.y += (surface.y - wolf.y) * Math.min(1, dt * 15);
-  wolf.vx = (wolf.x - beforeX) / dt;
-  wolf.gait += Math.abs(wolf.x - beforeX);
+  wolf.gait += Math.abs(speed) * dt;
   if (!state.defeat && wolf.phase === 'lunge' && !p.immune && Math.abs(wolf.x - p.x) < 40 &&
     p.y > wolf.y - 30 && p.y - 52 < wolf.y) {
     p.hearts--;
     p.immune = 1.35;
-    p.hurtAt = state.clock;
     p.vx = wolf.dir * 350;
     p.vy = -170;
     state.events.push('hurt');
