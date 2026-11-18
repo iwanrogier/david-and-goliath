@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#211d15">
+<title>David &amp; Goliath · The Shepherd</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="stage" aria-label="David and Goliath">
+  <canvas id="world" aria-label="The hills outside Bethlehem"></canvas>
+  <section id="hud" hidden aria-label="Level status">
+    <div class="vitals"><span id="hearts" aria-label="Health"></span><span id="stones"></span></div>
+    <div id="objective" role="status"></div>
+    <div class="settings"><button id="sound" type="button">Sound on</button><button id="pause" type="button">Pause</button></div>
+  </section>
+  <div id="notice" role="status" hidden></div>
+  <div id="charge" hidden><div></div></div>
+  <section id="touch" hidden aria-label="Touch controls">
+    <div class="touch-group"><button data-hold="left" aria-label="Move left">◀</button><button data-hold="right" aria-label="Move right">▶</button><button data-hold="run">Run</button></div>
+    <div class="touch-group"><button data-hold="jump" aria-label="Jump or climb">Jump</button><button data-hold="sling">Sling</button></div>
+  </section>
+  <div id="overlay" class="overlay">
+    <section class="card" aria-labelledby="heading">
+      <div id="chapter">David &amp; Goliath · Chapter I</div>
+      <h1 id="heading">The Shepherd</h1>
+      <p id="description">Loading the hills of Bethlehem…</p>
+      <p id="detail" class="detail"></p>
+      <div class="actions"><button id="primary" disabled>Begin</button><button id="secondary" hidden></button></div>
+    </section>
+  </div>
+  <div class="rotate">Turn your phone sideways to play.</div>
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
