@@ -112,3 +112,93 @@ test('checkpoint and completion saves round-trip without touching the legacy key
   assert.equal(readSave(local, LEVEL).complete, true);
   assert.equal(values.get('david-and-goliath'), 'legacy');
 });
+
+test('fatal hits lock controls and preserve a grounded defeat pose before retry', () => {
+  const state = createState(LEVEL);
+  Object.assign(state.david, { x: 2090, y: 414, hearts: 1 });
+  step(state, 80);
+  assert.ok(state.defeat);
+  assert.equal(state.dead, false);
+  assert.equal(state.david.hearts, 0);
+  const afterHit = state.david.x;
+  const stones = state.stones;
+  fire(state, { x: state.wolf.x, y: state.wolf.y - 20 }, 1);
+  assert.equal(state.stones, stones);
+  step(state, 170, { move: 1, jump: true, run: true });
+  assert.equal(state.dead, true);
+  assert.equal(state.wolf.phase, 'recover');
+  assert.ok(state.defeat.elapsed >= 1);
+  assert.ok(state.david.grounded);
+  assert.ok(Math.abs(state.david.x - afterHit) < 16);
+});
+
+test('collision produces a single contact burst and bounded wolf knockback', () => {
+  const state = createState(LEVEL);
+  Object.assign(state.david, { x: 1900, y: 414 });
+  Object.assign(state.wolf, { phase: 'recover', next: 20 });
+  fire(state, { x: state.wolf.x, y: 391 }, 1);
+  for (let i = 0; i < 80 && state.wolf.hp === 2; i++) step(state, 1);
+  assert.equal(state.wolf.phase, 'recoil');
+  assert.equal(state.effects.length, 1);
+  const [effect] = state.effects;
+  assert.equal(effect.kind, 'wolf');
+  assert.equal(effect.x, state.wolf.x - state.wolf.dir * 4 - 41);
+  assert.equal(state.shots.length, 0);
+  const before = state.wolf.x;
+  step(state, 30);
+  assert.ok(state.wolf.x - before > 18 && state.wolf.x - before < 34);
+  assert.equal(state.wolf.phase, 'recover');
+  assert.equal(state.events.filter(event => event === 'impact').length, 1);
+});
+
+test('terrain wins a swept hit if it blocks the shot before the wolf', () => {
+  const level = { ...LEVEL, platforms: [...LEVEL.platforms, { x: 2010, end: 2025, y: 350 }] };
+  const state = createState(level);
+  Object.assign(state.david, { x: 1900, y: 414 });
+  Object.assign(state.wolf, { phase: 'recover', next: 20 });
+  fire(state, { x: state.wolf.x, y: 391 }, 1);
+  step(state, 35);
+  assert.equal(state.wolf.hp, 2);
+  assert.equal(state.effects[0].kind, 'ground');
+  assert.equal(state.effects[0].x, 2010);
+});
+
+test('all three sheep hop across a gap and over a ledge without teleporting', () => {
+  const state = createState(LEVEL);
+  state.wolf.hp = 0;
+  for (const [i, sheep] of state.flock.entries()) Object.assign(sheep, { found: true, x: 870 - i * 52, y: 418 });
+  for (const [obstacle, playerX, playerY] of [[1085, 1375, 385], [2550, 2870, 385]]) {
+    if (obstacle === 2550) {
+      for (const [i, sheep] of state.flock.entries()) Object.assign(sheep, { x: 2480 - i * 52, y: 414 });
+    }
+    Object.assign(state.david, { x: playerX, y: playerY });
+    const jumped = new Set();
+    for (let n = 0; n < 360; n++) {
+      const previous = state.flock.map(s => s.x);
+      step(state, 1);
+      for (const [i, sheep] of state.flock.entries()) {
+        assert.ok(Math.abs(sheep.x - previous[i]) < 2.6);
+        assert.ok(sheep.y < 430);
+        if (sheep.hop) jumped.add(i);
+      }
+    }
+    assert.equal(jumped.size, 3);
+    assert.ok(state.flock.every(s => s.x > obstacle && s.grounded));
+    assert.ok(state.flock[0].x - state.flock[1].x > 28);
+    assert.ok(state.flock[1].x - state.flock[2].x > 28);
+  }
+});
+
+test('sheep stop short of an unsafe gap and can turn back without bouncing', () => {
+  const level = { ...LEVEL, platforms: [{ x: 0, end: 985, y: 418 }, { x: 1490, end: 3440, y: 418 }] };
+  const state = createState(level);
+  Object.assign(state.david, { x: 1695, y: 418 });
+  const sheep = state.flock[0];
+  Object.assign(sheep, { found: true, x: 925, y: 418 });
+  step(state, 360);
+  assert.ok(sheep.x < 980 && sheep.x > 955);
+  assert.ok(sheep.grounded && !sheep.hop);
+  Object.assign(state.david, { x: 785, y: 418 });
+  step(state, 180);
+  assert.ok(sheep.x < 861 && sheep.grounded);
+});

@@ -1,5 +1,5 @@
 export function createAudio() {
-  let context, master, ambience, nextNote = 0;
+  let context, master, ambience, grit, nextNote = 0;
   let muted = false;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
 
@@ -62,10 +62,34 @@ export function createAudio() {
     }
   }
 
+  function texture(frequency, duration, volume, type) {
+    if (!context || muted || context.state !== 'running') return;
+    if (!grit) {
+      grit = context.createBuffer(1, context.sampleRate / 4, context.sampleRate);
+      const data = grit.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const envelope = context.createGain();
+    const start = context.currentTime;
+    source.buffer = grit;
+    filter.type = type;
+    filter.frequency.setValueAtTime(frequency, start);
+    filter.frequency.exponentialRampToValueAtTime(frequency * .42, start + duration);
+    envelope.gain.setValueAtTime(volume, start);
+    envelope.gain.exponentialRampToValueAtTime(.001, start + duration);
+    source.connect(filter);
+    filter.connect(envelope);
+    envelope.connect(master);
+    source.start(start);
+    source.stop(start + duration);
+  }
+
   const effects = {
     jump: [195, .15, .09, 295], climb: [128, .23, .08, 95], step: [86, .055, .035, 62],
-    throw: [560, .20, .13, 115], stone: [290, .09, .1, 93], impact: [115, .19, .24, 51],
-    repelled: [170, .33, .22, 60], growl: [83, .4, .25, 59], snarl: [132, .29, .23, 55],
+    throw: [425, .12, .10, 104], stone: [720, .075, .13, 215], impact: [155, .115, .21, 61],
+    strongImpact: [136, .15, .26, 50], growl: [83, .4, .25, 59], snarl: [132, .29, .23, 55],
     hurt: [190, .34, .2, 76], sheep: [435, .32, .13, 293],
     pickup: [660, .19, .12, 870], checkpoint: [405, .35, .12, 610],
   };
@@ -81,6 +105,9 @@ export function createAudio() {
     effect(name) {
       const note = effects[name];
       if (note) tone(...note, 0, ['growl', 'snarl', 'throw', 'sheep'].includes(name) ? 'triangle' : 'sine');
+      if (name === 'throw') texture(1800, .095, .13, 'bandpass');
+      if (name === 'stone') texture(2900, .065, .21, 'bandpass');
+      if (name === 'impact' || name === 'strongImpact') texture(920, .11, .24, 'lowpass');
       if (name === 'complete') [293.66, 392, 440, 587.33].forEach((f, i) => tone(f, 1.5, .09, f, i * .17, 'triangle'));
     },
     update(time) {

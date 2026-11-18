@@ -24,6 +24,7 @@ function setText(element, text) {
 
 function setPanel(chapter, title, description, detail, primary, next, secondary, alternate) {
   ui.overlay.hidden = false;
+  ui.overlay.dataset.defeat = String(mode === 'dead' && !!state.defeat);
   setText(ui.chapter, chapter);
   setText(ui.heading, title);
   setText(ui.description, description);
@@ -50,7 +51,7 @@ function setMode(next) {
   ui.hud.hidden = next !== 'play';
   ui.touch.hidden = next !== 'play' || !coarse.matches;
   ui.notice.hidden = next !== 'play';
-  audio.setAmbience(next === 'play' || next === 'intro');
+  audio.setAmbience(next === 'play' || next === 'intro' || next === 'defeat');
 }
 
 function openTitle() {
@@ -131,6 +132,7 @@ function resolveEvent(name) {
     saveProgress(storage, LEVEL, state.checkpoint);
     announce('Checkpoint saved. A wolf is stalking the ridge.');
   }
+  if (name === 'defeat') setMode('defeat');
   if (name === 'empty') announce('Gather stones at a marked cairn.');
   if (name === 'sheep') announce('A sheep joins the flock.', 1.7);
   if (name === 'repelled') announce('The wolf has fled. Lead the flock to the sheepfold.');
@@ -153,6 +155,7 @@ function gameOver() {
 }
 
 function targetForAim() {
+  if (aim.direct) return renderer.worldPoint(aim.x, aim.y);
   if (aim.point) return aim.point;
   const p = state.david, wolf = state.wolf;
   const dx = wolf.x - p.x;
@@ -164,14 +167,16 @@ function targetForAim() {
 
 function currentAim() {
   if (!aim) return null;
-  return { target: targetForAim(), power: clamp((state.clock - aim.started) / .68, .16, 1) };
+  const elapsed = state.clock - aim.started;
+  return { target: targetForAim(), elapsed, power: clamp(elapsed / .68, .16, 1), cameraDirection: aim.direct ? aim.facing : null };
 }
 
 function holdAim(input, x, y, direct = false) {
   if (mode !== 'play' || aim) return;
   audio.enable();
-  aim = { input, x, y, started: state.clock, adjust: 0,
-    point: direct ? renderer.worldPoint(x, y) : null };
+  aim = { input, x, y, started: state.clock, adjust: 0, direct,
+    facing: direct ? (renderer.worldPoint(x, y).x >= state.david.x ? 1 : -1) : null,
+    point: null };
 }
 
 function releaseAim(input, cancel = false) {
@@ -224,7 +229,10 @@ canvas.addEventListener('pointerdown', event => {
   holdAim(event.pointerId, event.clientX, event.clientY, true);
 });
 canvas.addEventListener('pointermove', event => {
-  if (aim?.input === event.pointerId) aim.point = renderer.worldPoint(event.clientX, event.clientY);
+  if (aim?.input === event.pointerId && aim.direct) {
+    aim.x = event.clientX;
+    aim.y = event.clientY;
+  }
 });
 canvas.addEventListener('pointerup', event => releaseAim(event.pointerId));
 canvas.addEventListener('pointercancel', event => releaseAim(event.pointerId, true));
@@ -279,11 +287,11 @@ coarse.addEventListener('change', resize);
 function frame(time) {
   const dt = frameTime ? Math.min(.05, (time - frameTime) / 1000) : 0;
   frameTime = time;
-  if (mode === 'play') {
+  if (mode === 'play' || mode === 'defeat') {
     accumulator += dt;
     const actions = new Set(held.values());
     const move = Number(actions.has('right')) - Number(actions.has('left'));
-    while (accumulator >= STEP && mode === 'play') {
+    while (accumulator >= STEP && (mode === 'play' || mode === 'defeat')) {
       tick(state, { move, run: actions.has('run'), jump: jumpQueued, aim: !!aim });
       jumpQueued = false;
       accumulator -= STEP;
@@ -306,7 +314,7 @@ function frame(time) {
       hud();
     }
   }
-  renderer.draw(state, currentAim(), dt);
+  renderer.draw(state, currentAim, dt);
   requestAnimationFrame(frame);
 }
 

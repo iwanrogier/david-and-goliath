@@ -2,6 +2,10 @@ export const STEP = 1 / 120;
 const GRAVITY = 1200;
 const STONE_GRAVITY = 510;
 const SAVE_VERSION = 1;
+const DEFEAT_TIME = 1.03;
+const SHEEP_HOP_VX = 250;
+const SHEEP_HOP_VY = -470;
+export const CAST_TIME = .32;
 export const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 export function readSave(storage, level) {
@@ -31,14 +35,14 @@ export function saveProgress(storage, level, snapshot) {
 export function createState(level, checkpoint = null) {
   const { x, y } = checkpoint ? level.checkpoint : level.spawn;
   return {
-    level, checkpoint, clock: 0, complete: false, dead: false,
+    level, checkpoint, clock: 0, complete: false, dead: false, defeat: null,
     david: { x, y, vx: 0, vy: 0, dir: 1, grounded: true, hearts: 3, immune: 0, gait: 0, cast: 0, climb: 0, buffer: 0, grace: 0 },
     stones: checkpoint?.stones ?? 5, flock: level.sheep.map((s, i) => ({
       ...s, found: checkpoint?.flock[i] ?? false, x: checkpoint?.flock[i] ? x - 45 - 35 * i : s.x,
-      y: checkpoint?.flock[i] ? y : s.y, vy: 0, dir: 1, gait: 0,
+      y: checkpoint?.flock[i] ? y : s.y, vx: 0, vy: 0, grounded: true, hop: false, dir: 1, gait: 0,
     })),
     pickups: level.stones.map(s => ({ ...s, ready: 0 })),
-    wolf: { ...level.wolf, dir: -1, gait: 0, hp: 2, phase: 'patrol', next: 0, flash: 0 },
+    wolf: { ...level.wolf, dir: -1, gait: 0, hp: 2, phase: 'patrol', next: 0, recoil: 0, impulse: 0 },
     shots: [], effects: [], events: [],
   };
 }
@@ -109,8 +113,8 @@ function updateDavid(state, input, dt) {
 
 export function shotVector(david, target, power) {
   const dir = target.x >= david.x ? 1 : -1;
-  const x = david.x + dir * 15;
-  const y = david.y - 50;
+  const x = david.x + dir * 24;
+  const y = david.y - 56;
   const dx = target.x - x;
   const speed = 470 + 425 * power;
   const travel = Math.max(.09, Math.abs(dx) / speed);
@@ -123,7 +127,7 @@ export function shotPoint(shot, time) {
 }
 
 export function fire(state, target, power) {
-  if (state.dead || state.complete || state.david.cast || state.david.climb) return;
+  if (state.dead || state.defeat || state.complete || state.david.cast || state.david.climb) return;
   if (!state.stones) {
     state.events.push('empty');
     return;
@@ -132,17 +136,23 @@ export function fire(state, target, power) {
   state.stones--;
   state.shots.push(shot);
   state.david.dir = shot.dir;
-  state.david.cast = .33;
+  state.david.cast = CAST_TIME;
   state.events.push('throw');
 }
 
 function updateWolf(state, dt) {
   const { wolf, david: p, level, clock } = state;
-  wolf.flash = Math.max(0, wolf.flash - dt);
   let speed = 0;
   const distance = p.x - wolf.x;
   const onRidge = p.x > 1700 && p.x < 2500 && Math.abs(p.y - wolf.y) < 140;
-  if (wolf.phase === 'flee') {
+  if (wolf.phase === 'recoil') {
+    wolf.recoil = Math.max(0, wolf.recoil - dt);
+    speed = wolf.impulse * (wolf.recoil / .24);
+    if (!wolf.recoil) {
+      wolf.phase = wolf.hp ? 'recover' : 'flee';
+      if (!wolf.hp) state.events.push('repelled');
+    }
+  } else if (wolf.phase === 'flee') {
     wolf.dir = 1;
     speed = 320;
   } else if (wolf.phase === 'lunge') {
@@ -177,15 +187,37 @@ function updateWolf(state, dt) {
   const surface = floorAt(level, wolf.x).find(platform => platform.y >= 380);
   if (surface) wolf.y += (surface.y - wolf.y) * Math.min(1, dt * 15);
   wolf.gait += Math.abs(speed) * dt;
-  if (wolf.phase === 'lunge' && !p.immune && Math.abs(wolf.x - p.x) < 40 &&
+  if (!state.defeat && wolf.phase === 'lunge' && !p.immune && Math.abs(wolf.x - p.x) < 40 &&
     p.y > wolf.y - 30 && p.y - 52 < wolf.y) {
     p.hearts--;
     p.immune = 1.35;
     p.vx = wolf.dir * 350;
     p.vy = -170;
     state.events.push('hurt');
-    if (!p.hearts) state.dead = true;
+    if (!p.hearts) {
+      p.vx = wolf.dir * 112;
+      p.vy = Math.min(p.vy + 80, -90);
+      p.immune = p.cast = p.buffer = p.climb = 0;
+      state.defeat = { elapsed: 0, dir: -wolf.dir };
+      state.events.push('defeat');
+    }
   }
+}
+
+function segmentEntry(from, to, left, top, right, bottom) {
+  let enter = 0, leave = 1;
+  for (const [value, end, low, high] of [[from.x, to.x, left, right], [from.y, to.y, top, bottom]]) {
+    const delta = end - value;
+    if (delta === 0) {
+      if (value < low || value > high) return Infinity;
+      continue;
+    }
+    const a = (low - value) / delta, b = (high - value) / delta;
+    enter = Math.max(enter, Math.min(a, b));
+    leave = Math.min(leave, Math.max(a, b));
+    if (enter > leave) return Infinity;
+  }
+  return enter;
 }
 
 function updateShots(state, dt) {
@@ -194,34 +226,65 @@ function updateShots(state, dt) {
     const from = shotPoint(shot, shot.age);
     shot.age += dt;
     const to = shotPoint(shot, shot.age);
-    const stepCount = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 4));
-    for (let i = 1; i <= stepCount; i++) {
-      const x = from.x + (to.x - from.x) * i / stepCount;
-      const y = from.y + (to.y - from.y) * i / stepCount;
-      const wolfCenter = wolf.x - wolf.dir * 4;
-      if (wolf.hp && Math.abs(x - wolfCenter) < 41 && y >= wolf.y - 38 && y <= wolf.y - 4) {
+    const center = wolf.x - wolf.dir * 4;
+    const enemyHit = wolf.hp ? segmentEntry(from, to, center - 41, wolf.y - 38, center + 41, wolf.y - 4) : Infinity;
+    let groundHit = Infinity;
+    for (const surface of level.platforms) {
+      groundHit = Math.min(groundHit, segmentEntry(from, to, surface.x, surface.y, surface.end, 660));
+    }
+    const fraction = Math.min(enemyHit, groundHit);
+    if (Number.isFinite(fraction)) {
+      const kind = enemyHit < groundHit ? 'wolf' : 'ground';
+      const strength = clamp((Math.abs(shot.vx) - 470) / 425, .16, 1);
+      state.effects.push({
+        kind, strength, dir: shot.dir, born: state.clock,
+        x: from.x + (to.x - from.x) * fraction, y: from.y + (to.y - from.y) * fraction,
+      });
+      if (kind === 'wolf') {
         wolf.hp--;
-        wolf.flash = .26;
-        wolf.phase = wolf.hp ? 'recover' : 'flee';
+        wolf.phase = 'recoil';
+        wolf.recoil = .24;
+        wolf.impulse = shot.dir * (165 + strength * 95);
         wolf.next = state.clock + 1.25;
-        state.effects.push({ x, y, born: state.clock });
-        state.events.push(wolf.hp ? 'impact' : 'repelled');
-        return false;
-      }
-      if (floorAt(level, x).some(surface => y >= surface.y && y < 660)) {
-        state.effects.push({ x, y, born: state.clock });
-        state.events.push('stone');
-        return false;
-      }
+        state.events.push(wolf.hp ? 'impact' : 'strongImpact');
+      } else state.events.push('stone');
+      return false;
     }
     return shot.age < 2 && to.x > 0 && to.x < level.width && to.y < 665;
   });
-  state.effects = state.effects.filter(effect => state.clock - effect.born < .4);
+  state.effects = state.effects.filter(effect => state.clock - effect.born < .48);
+}
+
+function topSurface(level, x) {
+  return floorAt(level, x).reduce((top, surface) => Math.min(top, surface.y), Infinity);
+}
+
+function obstacleAhead(level, sheep, direction) {
+  for (let distance = 3; distance <= 27; distance += 3) {
+    const x = sheep.x + distance * direction;
+    const y = topSurface(level, x);
+    if (!Number.isFinite(y) || y < sheep.y - 7) return x;
+  }
+  return null;
+}
+
+function canHop(level, sheep, edge, direction) {
+  // Trace a copy with the same collision routine as the live hop. This checks
+  // both clearance at the near edge and a grounded landing beyond it.
+  const trace = { x: sheep.x, y: sheep.y, vx: SHEEP_HOP_VX * direction, vy: SHEEP_HOP_VY };
+  for (let i = 0; i < 116; i++) {
+    advanceBody(trace, level, STEP);
+    if (trace.grounded) {
+      return (trace.x - edge) * direction > 11 && trace.y < sheep.y + 90;
+    }
+    if (trace.y > sheep.y + 90) return false;
+  }
+  return false;
 }
 
 function updateFlock(state, dt) {
-  const p = state.david;
-  const wolf = state.wolf;
+  const { level, wolf, david: p } = state;
+  const atFold = p.x > level.exit.x - 40;
   for (const [i, sheep] of state.flock.entries()) {
     if (!sheep.found && Math.abs(sheep.x - p.x) < 62 && Math.abs(sheep.y - p.y) < 64) {
       if (i === 1 && wolf.hp && Math.abs(wolf.x - sheep.x) < 185) continue;
@@ -229,32 +292,54 @@ function updateFlock(state, dt) {
       state.events.push('sheep');
     }
     if (!sheep.found) continue;
-    const target = state.level.exit.x - 35 * (i + 1);
-    const end = p.x > state.level.exit.x - 40;
-    const gap = end ? target - sheep.x : p.x - sheep.x;
-    const follow = end ? gap : Math.sign(gap) * Math.max(0, Math.abs(gap) - 55 - 34 * i);
-    if (Math.abs(gap) > 310 || sheep.y > 600) {
-      sheep.x = p.x - p.dir * (55 + 34 * i);
-      sheep.y = p.y - 13;
-      sheep.vy = 0;
+
+    const gap = (atFold ? level.exit.x - 35 * (i + 1) : p.x) - sheep.x;
+    const direction = Math.sign(gap);
+    const desired = atFold ? gap : direction * Math.max(0, Math.abs(gap) - 55 - 34 * i);
+    const before = sheep.x;
+    if (!sheep.hop) {
+      sheep.vx = clamp(desired * 4, -300, 300);
+      if (sheep.grounded && direction && Math.abs(desired) > 3) {
+        const edge = obstacleAhead(level, sheep, direction);
+        if (edge !== null && Math.abs(desired) + 8 >= Math.abs(edge - sheep.x) &&
+          canHop(level, sheep, edge, direction)) {
+          sheep.hop = true;
+          sheep.vx = SHEEP_HOP_VX * direction;
+          sheep.vy = SHEEP_HOP_VY;
+        } else if (edge !== null) {
+          // Stay back from an unsafe edge so that the flock never walks into it.
+          sheep.vx = direction * Math.min(Math.abs(sheep.vx), Math.max(0, Math.abs(edge - sheep.x) - 8) / dt);
+        }
+      }
     }
-    const vx = clamp(follow * 4, -300, 300);
-    if (Math.abs(vx) > 8) sheep.dir = Math.sign(vx);
-    sheep.gait += Math.abs(vx) * dt;
-    const next = sheep.x + vx * dt;
-    const upcoming = floorAt(state.level, next).find(surface => surface.y > sheep.y - 48);
-    if (Math.abs(vx) > 40 && sheep.grounded && (!upcoming || upcoming.y < sheep.y - 12)) sheep.vy = -430;
-    advanceBody(Object.assign(sheep, { vx }), state.level, dt);
+    if (Math.abs(sheep.vx) > 8) sheep.dir = Math.sign(sheep.vx);
+    advanceBody(sheep, level, dt);
+    if (sheep.grounded) sheep.hop = false;
+    sheep.gait += Math.abs(sheep.x - before);
   }
+}
+
+function updateDefeat(state, dt) {
+  const p = state.david;
+  state.defeat.elapsed += dt;
+  p.vx *= Math.exp(-dt * 8);
+  if (!Number.isFinite(topSurface(state.level, p.x + Math.sign(p.vx) * 12))) p.vx = 0;
+  advanceBody(p, state.level, dt);
+  if (state.defeat.elapsed >= DEFEAT_TIME && (p.grounded || p.y > 660)) state.dead = true;
 }
 
 export function tick(state, input, dt = STEP) {
   if (state.complete || state.dead) return;
   state.clock += dt;
+  if (state.defeat) {
+    if (state.wolf.phase === 'lunge') updateWolf(state, dt);
+    updateDefeat(state, dt);
+    return;
+  }
   updateDavid(state, input, dt);
   if (state.dead) return;
   updateWolf(state, dt);
-  if (state.dead) return;
+  if (state.defeat) return;
   updateShots(state, dt);
   updateFlock(state, dt);
   const { david: p, level, flock } = state;
@@ -270,7 +355,7 @@ export function tick(state, input, dt = STEP) {
     state.events.push('checkpoint');
   }
   if (!state.wolf.hp && flock.every(sheep => sheep.found) && Math.abs(p.x - level.exit.x) < 48 &&
-    flock.every(sheep => sheep.x > level.exit.x - 173 && Math.abs(sheep.y - level.exit.y) < 35)) {
+    flock.every(sheep => sheep.grounded && sheep.x > level.exit.x - 173 && Math.abs(sheep.y - level.exit.y) < 35)) {
     state.complete = true;
     state.events.push('complete');
   }
