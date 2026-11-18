@@ -1,5 +1,6 @@
 import { LEVEL, INTRO } from './level.js';
 import { createState, tick, fire, STEP, clamp, readSave, saveProgress } from './simulation.js';
+import { captureMotion } from './motion.js';
 import { createRenderer, loadArt } from './render.js';
 import { createAudio } from './audio.js';
 
@@ -16,7 +17,8 @@ try { storage = window.localStorage; } catch {}
 const saved = readSave(storage, LEVEL);
 let state = createState(LEVEL);
 let renderer, mode = 'loading', intro = 0, jumpQueued = false, aim = null;
-let noticeUntil = 0, frameTime = 0, accumulator = 0, lastFootstep = 0, ravineTip = false;
+let noticeUntil = 0, frameTime = 0, accumulator = 0, ravineTip = false;
+let previousMotion = null;
 
 function setText(element, text) {
   if (element.textContent !== text) element.textContent = text;
@@ -76,7 +78,7 @@ function story(index) {
 function start(checkpoint = null) {
   audio.enable();
   state = createState(LEVEL, checkpoint);
-  lastFootstep = 0;
+  previousMotion = null;
   ravineTip = !!checkpoint;
   accumulator = 0;
   renderer.draw(state, null, 0, true);
@@ -292,6 +294,7 @@ function frame(time) {
     const actions = new Set(held.values());
     const move = Number(actions.has('right')) - Number(actions.has('left'));
     while (accumulator >= STEP && (mode === 'play' || mode === 'defeat')) {
+      previousMotion = captureMotion(state);
       tick(state, { move, run: actions.has('run'), jump: jumpQueued, aim: !!aim });
       jumpQueued = false;
       accumulator -= STEP;
@@ -304,9 +307,6 @@ function frame(time) {
         ravineTip = true;
         announce('Jump near the edge to cross the ravine.', 3);
       }
-      const pace = Math.floor(state.david.gait / 29);
-      if (pace !== lastFootstep && state.david.grounded) audio.effect('step');
-      lastFootstep = pace;
       const active = currentAim();
       ui.charge.hidden = !active;
       if (active) ui.charge.firstElementChild.style.transform = 'scaleX(' + active.power + ')';
@@ -314,7 +314,9 @@ function frame(time) {
       hud();
     }
   }
-  renderer.draw(state, currentAim, dt);
+  const live = mode === 'play' || mode === 'defeat';
+  const footstep = renderer.draw(state, currentAim, dt, false, live ? previousMotion : null, accumulator / STEP);
+  if (footstep && mode === 'play') audio.effect('step');
   requestAnimationFrame(frame);
 }
 
